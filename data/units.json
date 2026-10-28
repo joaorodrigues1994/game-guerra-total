@@ -1,0 +1,47 @@
+[
+  {
+    "id": "unit_line_inf",
+    "name": "Infantaria de linha",
+    "category": "infantry",
+    "recruit_cost": { "gold": 60, "materials": 20, "manpower": 500 },
+    "upkeep": { "gold": 4, "food": 5 },
+    "strength": 500,
+    "attack": 6,
+    "defense": 6,
+    "mobility": 3,
+    "range": 2,
+    "morale": 70,
+    "experience": 0,
+    "requirements": { "buildings": ["barracks"] }
+  },
+  {
+    "id": "unit_light_cav",
+    "name": "Cavalaria ligeira",
+    "category": "cavalry",
+    "recruit_cost": { "gold": 90, "materials": 25, "manpower": 200 },
+    "upkeep": { "gold": 6, "food": 6 },
+    "strength": 200,
+    "attack": 7,
+    "defense": 4,
+    "mobility": 6,
+    "range": 1,
+    "morale": 65,
+    "experience": 0,
+    "requirements": { "buildings": ["barracks"] }
+  },
+  {
+    "id": "unit_field_art",
+    "name": "Artilharia de campanha",
+    "category": "artillery",
+    "recruit_cost": { "gold": 120, "materials": 60, "manpower": 80 },
+    "upkeep": { "gold": 7, "food": 2 },
+    "strength": 80,
+    "attack": 9,
+    "defense": 3,
+    "mobility": 2,
+    "range": 5,
+    "morale": 60,
+    "experience": 0,
+    "requirements": { "buildings": ["arsenal"] }
+  }
+]

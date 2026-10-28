@@ -1,0 +1,9 @@
+{
+  "start_year": 1805,
+  "start_month": 1,
+  "months_per_turn": 1,
+  "resources": ["gold", "food", "materials", "manpower", "prestige"],
+  "terrains": ["plains", "hills", "mountains", "forest", "river_valley"],
+  "unit_categories": ["infantry", "cavalry", "artillery"],
+  "link_types": ["land", "river", "road"]
+}

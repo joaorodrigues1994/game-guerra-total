@@ -1,0 +1,47 @@
+[
+  {
+    "id": "prov_paris",
+    "name": "Île-de-France",
+    "owner": "fra",
+    "neighbors": [{ "id": "prov_strasbourg", "type": "road" }],
+    "population": 60000,
+    "production": { "gold": 12, "food": 8, "materials": 5 },
+    "economic_value": 10,
+    "terrain": "plains",
+    "city": { "name": "Paris" },
+    "buildings": ["market"],
+    "garrison": 2000,
+    "strategic_value": 9
+  },
+  {
+    "id": "prov_strasbourg",
+    "name": "Alsácia",
+    "owner": "fra",
+    "neighbors": [
+      { "id": "prov_paris", "type": "road" },
+      { "id": "prov_vienna", "type": "land" }
+    ],
+    "population": 25000,
+    "production": { "gold": 5, "food": 6, "materials": 3 },
+    "economic_value": 5,
+    "terrain": "river_valley",
+    "city": { "name": "Estrasburgo" },
+    "buildings": [],
+    "garrison": 800,
+    "strategic_value": 7
+  },
+  {
+    "id": "prov_vienna",
+    "name": "Baixa Áustria",
+    "owner": "aus",
+    "neighbors": [{ "id": "prov_strasbourg", "type": "land" }],
+    "population": 45000,
+    "production": { "gold": 9, "food": 7, "materials": 4 },
+    "economic_value": 8,
+    "terrain": "hills",
+    "city": { "name": "Viena" },
+    "buildings": ["barracks"],
+    "garrison": 1500,
+    "strategic_value": 8
+  }
+]

@@ -1,0 +1,8 @@
+[
+  { "id": "farm", "name": "Fazenda", "cost": { "gold": 100 }, "build_turns": 2, "effects": { "food": 4 }, "requires": [] },
+  { "id": "market", "name": "Mercado", "cost": { "gold": 150 }, "build_turns": 3, "effects": { "gold": 5 }, "requires": [] },
+  { "id": "workshop", "name": "Oficina", "cost": { "gold": 150 }, "build_turns": 3, "effects": { "materials": 3 }, "requires": [] },
+  { "id": "barracks", "name": "Quartel", "cost": { "gold": 200 }, "build_turns": 4, "effects": { "recruit_capacity": 1 }, "requires": [] },
+  { "id": "arsenal", "name": "Arsenal", "cost": { "gold": 300, "materials": 50 }, "build_turns": 6, "effects": { "unlocks_artillery": 1 }, "requires": ["workshop"] },
+  { "id": "fortification", "name": "Fortificação", "cost": { "gold": 250, "materials": 40 }, "build_turns": 5, "effects": { "defense_bonus": 2 }, "requires": [] }
+]

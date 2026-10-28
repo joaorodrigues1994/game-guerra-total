@@ -1,0 +1,16 @@
+[
+  {
+    "id": "fra",
+    "name": "França",
+    "color": "#1f3fa8",
+    "capital": "prov_paris",
+    "starting_resources": { "gold": 500, "food": 300, "materials": 200, "manpower": 1000, "prestige": 50 }
+  },
+  {
+    "id": "aus",
+    "name": "Áustria",
+    "color": "#d8d3c4",
+    "capital": "prov_vienna",
+    "starting_resources": { "gold": 400, "food": 350, "materials": 150, "manpower": 900, "prestige": 40 }
+  }
+]

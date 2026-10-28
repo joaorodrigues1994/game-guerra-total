@@ -1,0 +1,24 @@
+# Godot 4
+.godot/
+.import/
+*.translation
+export_presets.cfg
+export_credentials.cfg
+/build/
+/export/
+
+# Binário da engine (mantido localmente, não versionado)
+Godot_v*/
+
+# Windows
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.dmp
+*.lnk
+
+# Editores / temporários
+.vscode/
+.idea/
+*.tmp
+*.log
