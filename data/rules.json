@@ -2,6 +2,8 @@
   "start_year": 1805,
   "start_month": 1,
   "months_per_turn": 1,
+  "max_concurrent_constructions": 1,
+  "manpower_rate": 0.002,
   "map_size": [1000, 600],
   "resources": ["gold", "food", "materials", "manpower", "prestige"],
   "terrains": ["plains", "hills", "mountains", "forest", "river_valley"],
@@ -20,6 +22,11 @@
     "mountains": "Montanhas",
     "forest": "Floresta",
     "river_valley": "Vale fluvial"
+  },
+  "effect_names": {
+    "recruit_capacity": "Capacidade de recrutamento",
+    "defense_bonus": "Bônus defensivo",
+    "unlocks_artillery": "Libera artilharia"
   },
   "link_type_names": {
     "land": "Terra",

@@ -1,7 +1,6 @@
 extends "res://tests/test_case.gd"
 ## Geometria e consistência dos dados do mapa de campanha.
 
-const Registry := preload("res://src/core/registry.gd")
 const MapGeometry := preload("res://src/provinces/map_geometry.gd")
 const ProvinceMap := preload("res://src/provinces/province_map.gd")
 

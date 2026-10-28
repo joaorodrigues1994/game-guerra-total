@@ -6,6 +6,7 @@ const PANEL_BORDER := Color("6b5230")
 const TEXT := Color("efe4c8")
 const TEXT_DIM := Color("a89a7c")
 const ACCENT := Color("ffd84a")
+const ERROR := Color("ff8a70")
 
 
 static func panel_style(border_sides: Array[int] = []) -> StyleBoxFlat:

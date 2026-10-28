@@ -1,14 +1,16 @@
 extends Control
-## Tela de campanha: barra superior, mapa e painel lateral. Esc limpa a seleção.
+## Tela de campanha: barra superior, mapa + barra de mensagens e painel lateral. Esc limpa a seleção.
 
 const CampaignController := preload("res://src/campaign/campaign_controller.gd")
 const MapView := preload("res://src/ui/map_view.gd")
 const ProvincePanel := preload("res://src/ui/province_panel.gd")
+const StatusBar := preload("res://src/ui/status_bar.gd")
 const TopBar := preload("res://src/ui/top_bar.gd")
 
 var controller: CampaignController
 var top_bar: PanelContainer
 var map_view: Control
+var status_bar: PanelContainer
 var province_panel: PanelContainer
 
 
@@ -23,6 +25,7 @@ func setup(p_controller: CampaignController) -> void:
 
 	top_bar = TopBar.new()
 	top_bar.bind(controller)
+	top_bar.end_turn_requested.connect(controller.end_turn)
 	root.add_child(top_bar)
 
 	var body := HBoxContainer.new()
@@ -30,10 +33,19 @@ func setup(p_controller: CampaignController) -> void:
 	body.add_theme_constant_override("separation", 0)
 	root.add_child(body)
 
+	var left := VBoxContainer.new()
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left.add_theme_constant_override("separation", 0)
+	body.add_child(left)
+
 	map_view = MapView.new()
-	map_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	map_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	map_view.bind(controller)
-	body.add_child(map_view)
+	left.add_child(map_view)
+
+	status_bar = StatusBar.new()
+	status_bar.bind(controller)
+	left.add_child(status_bar)
 
 	province_panel = ProvincePanel.new()
 	province_panel.bind(controller)

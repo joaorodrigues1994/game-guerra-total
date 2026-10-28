@@ -12,7 +12,7 @@
     "economic_value": 10,
     "terrain": "plains",
     "city": { "name": "Paris" },
-    "buildings": ["market"],
+    "buildings": ["market", "barracks"],
     "garrison": 2000,
     "strategic_value": 9,
     "map": {

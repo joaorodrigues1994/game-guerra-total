@@ -118,9 +118,9 @@ func test_layout_fills_window_with_usable_map_area() -> void:
 	await tree.process_frame
 	var screen = main.screen
 	assert_eq(screen.size, Vector2(1280, 720), "tela ocupa a janela")
-	assert_true(screen.map_view.size.x >= 900 and screen.map_view.size.y >= 600,
+	assert_true(screen.map_view.size.x >= 900 and screen.map_view.size.y >= 480,
 		"área do mapa utilizável: %s" % screen.map_view.size)
-	assert_true(screen.province_panel.size.x >= 320, "painel lateral: %s" % screen.province_panel.size)
+	assert_true(screen.province_panel.size.x >= 330, "painel lateral: %s" % screen.province_panel.size)
 	assert_eq(screen.top_bar.size.x, 1280.0, "barra superior não estoura a janela")
 	assert_true(screen.top_bar.get_combined_minimum_size().x <= 1280.0, "largura mínima da barra superior")
 	main.free()
@@ -131,3 +131,87 @@ func test_format_int_uses_dot_separator() -> void:
 	assert_eq(ProvincePanel.format_int(950), "950", "centenas")
 	assert_eq(ProvincePanel.format_int(60000), "60.000", "milhar")
 	assert_eq(ProvincePanel.format_int(1234567), "1.234.567", "milhão")
+
+
+# --- Economia, construção, recrutamento e fim de turno ----------------------
+
+func test_top_bar_shows_resources_income_and_expenses() -> void:
+	var main := _main()
+	var bar = main.screen.top_bar
+	assert_true("Ouro 500" in bar.resources_label.text and "Alimentos 300" in bar.resources_label.text
+		and "Materiais 200" in bar.resources_label.text, bar.resources_label.text)
+	assert_true("Ouro +22" in bar.flows_label.text and "Alimentos +14" in bar.flows_label.text, bar.flows_label.text)
+	assert_true("Despesas por turno: —" in bar.flows_label.text, "sem despesas no início: " + bar.flows_label.text)
+	main.free()
+
+
+func test_build_button_executes_real_action() -> void:
+	var main := _main()
+	var screen = main.screen
+	main.controller.select_province("prov_strasbourg")
+	var panel = screen.province_panel
+	assert_true(panel.build_buttons.has("farm") and not panel.build_buttons["farm"].disabled, "botão da Fazenda ativo")
+	panel.build_buttons["farm"].pressed.emit()
+	assert_eq(main.state.resources_of("fra")["gold"], 400, "custo descontado no estado")
+	assert_true("Fazenda — 2 turnos" in panel.constructions_label.text, "painel mostra obra: " + panel.constructions_label.text)
+	assert_true("Ouro 400" in screen.top_bar.resources_label.text, "barra superior atualizada")
+	assert_true("Construção iniciada" in screen.status_bar.message_label.text, "mensagem: " + screen.status_bar.message_label.text)
+	assert_true(panel.build_buttons["workshop"].disabled, "fila cheia: demais botões desabilitados")
+	main.free()
+
+
+func test_disabled_options_show_the_reason() -> void:
+	var main := _main()
+	main.controller.select_province("prov_strasbourg")
+	var panel = main.screen.province_panel
+	assert_true(panel.recruit_buttons["unit_line_inf"].disabled, "sem Quartel: recrutar desabilitado")
+	assert_true("Requer: Quartel" in panel.recruit_buttons["unit_line_inf"].tooltip_text, "motivo no botão")
+	var shown := false
+	for child in panel._actions.get_children():
+		shown = shown or (child is Label and "Requer: Quartel" in child.text)
+	assert_true(shown, "motivo visível no painel")
+	main.free()
+
+
+func test_foreign_province_shows_no_action_buttons() -> void:
+	var main := _main()
+	main.controller.select_province("prov_vienna")
+	var panel = main.screen.province_panel
+	assert_true(panel.build_buttons.is_empty() and panel.recruit_buttons.is_empty(), "sem botões")
+	assert_true(panel.actions_note_label != null and "outro país" in panel.actions_note_label.text, "aviso exibido")
+	main.free()
+
+
+func test_recruit_button_then_end_turn_button_flow() -> void:
+	var main := _main()
+	var screen = main.screen
+	main.controller.select_province("prov_paris")
+	var panel = screen.province_panel
+	panel.recruit_buttons["unit_line_inf"].pressed.emit()
+	assert_eq(main.state.resources_of("fra")["manpower"], 500, "recrutáveis descontados")
+	assert_true("Infantaria de linha — 2 turnos" in panel.recruitments_label.text, panel.recruitments_label.text)
+
+	screen.top_bar.end_turn_button.pressed.emit()
+	assert_eq(main.state.turn, 2, "turno avançou")
+	assert_eq(screen.top_bar.date_label.text, "Fevereiro de 1805 · Turno 2", "data na barra")
+	assert_true("Turno 1 encerrado" in screen.status_bar.message_label.text, "resumo do turno")
+	assert_true("1 turno" in panel.recruitments_label.text, "progresso visível: " + panel.recruitments_label.text)
+
+	screen.top_bar.end_turn_button.pressed.emit()
+	assert_true(main.state.units.size() == 1, "unidade criada no estado")
+	assert_true("Infantaria de linha × 1 (500 homens)" in panel.units_label.text, panel.units_label.text)
+	assert_true("Unidade pronta" in screen.status_bar.message_label.text, "aviso de unidade pronta")
+	screen.top_bar.end_turn_button.pressed.emit()
+	assert_true("Gold" not in screen.top_bar.flows_label.text and "Ouro -4" in screen.top_bar.flows_label.text,
+		"despesa de manutenção exibida: " + screen.top_bar.flows_label.text)
+	main.free()
+
+
+func test_selection_still_works_with_new_panels() -> void:
+	var main := _main()
+	var view: Control = main.screen.map_view
+	view.size = Vector2(900, 500)
+	_click(view, MOUSE_BUTTON_LEFT, main.controller.province_map.label_points["prov_paris"])
+	assert_eq(main.screen.province_panel.title_label.text, "Île-de-France", "seleção por clique")
+	assert_true(main.screen.province_panel.build_buttons.has("farm"), "opções de construção exibidas")
+	main.free()

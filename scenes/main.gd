@@ -27,6 +27,7 @@ func _ready() -> void:
 	province_map.build(registry)
 	controller = CampaignController.new()
 	controller.setup(registry, state, province_map)
+	controller.bus = get_node_or_null("/root/EventBus")  # autoload; ausente em testes sem o projeto completo
 
 	screen = CampaignScreen.new()
 	add_child(screen)

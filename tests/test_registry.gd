@@ -1,6 +1,5 @@
 extends "res://tests/test_case.gd"
 
-const Registry := preload("res://src/core/registry.gd")
 
 
 func _valid_raw() -> Dictionary:
@@ -71,3 +70,38 @@ func test_unknown_building_requirement_rejected() -> void:
 	var reg := Registry.new()
 	assert_true(not reg.load_from_data(raw), "requisito inexistente deve falhar")
 	assert_has_error(reg.errors, "id desconhecido")
+
+
+func test_economy_rules_and_definitions_are_validated() -> void:
+	var raw := _valid_raw()
+	raw["buildings"][0]["effects"]["magia"] = 3.0
+	var reg := Registry.new()
+	assert_true(not reg.load_from_data(raw), "efeito desconhecido")
+	assert_has_error(reg.errors, "efeito desconhecido")
+
+	raw = _valid_raw()
+	raw["buildings"][0].erase("buildable")
+	reg = Registry.new()
+	assert_true(not reg.load_from_data(raw), "buildable ausente")
+	assert_has_error(reg.errors, "buildable")
+
+	raw = _valid_raw()
+	raw["units"][0]["recruit_turns"] = 0.0
+	reg = Registry.new()
+	assert_true(not reg.load_from_data(raw), "duração inválida")
+	assert_has_error(reg.errors, "recruit_turns")
+
+	raw = _valid_raw()
+	raw["rules"].erase("manpower_rate")
+	reg = Registry.new()
+	assert_true(not reg.load_from_data(raw), "regra ausente")
+	assert_has_error(reg.errors, "manpower_rate")
+
+
+func test_recruitable_unit_and_buildable_buildings_exist_in_data() -> void:
+	var reg := Registry.new()
+	assert_true(reg.load_from_dir("res://data"), str(reg.errors))
+	assert_true(reg.units["unit_line_inf"]["recruitable"], "infantaria de linha recrutável")
+	assert_true(not reg.units["unit_light_cav"]["recruitable"], "cavalaria ainda não")
+	for id in ["farm", "market", "workshop", "barracks", "fortification"]:
+		assert_true(reg.buildings[id]["buildable"], "%s construível" % id)

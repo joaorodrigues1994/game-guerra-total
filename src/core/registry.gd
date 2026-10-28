@@ -120,6 +120,10 @@ func _validate_rules(r: Variant) -> bool:
 	var map_size: Variant = r.get("map_size")
 	if not _is_point(map_size) or map_size[0] <= 0 or map_size[1] <= 0:
 		errors.append("rules.map_size deve ser [largura, altura] positivos")
+	_check_number(r, "max_concurrent_constructions", "rules", 1.0)
+	_check_number(r, "manpower_rate", "rules")
+	if typeof(r.get("effect_names")) != TYPE_DICTIONARY:
+		errors.append("rules.effect_names deve ser um objeto")
 	if errors.is_empty():
 		_check_names(r, "resource_names", "resources")
 		_check_names(r, "terrain_names", "terrains")
@@ -262,6 +266,8 @@ func _validate_unit(u: Dictionary) -> void:
 		_check_number(u, field, ctx)
 	_check_resource_dict(u, "recruit_cost", ctx, false)
 	_check_resource_dict(u, "upkeep", ctx, false)
+	_check_bool(u, "recruitable", ctx)
+	_check_number(u, "recruit_turns", ctx, 1.0)
 	var req: Variant = u.get("requirements")
 	if typeof(req) != TYPE_DICTIONARY:
 		errors.append("%s: requirements deve ser um objeto" % ctx)
@@ -274,8 +280,16 @@ func _validate_building(b: Dictionary) -> void:
 	_require_string(b, "name", ctx)
 	_check_number(b, "build_turns", ctx, 1.0)
 	_check_resource_dict(b, "cost", ctx, false)
-	if typeof(b.get("effects")) != TYPE_DICTIONARY:
+	_check_bool(b, "buildable", ctx)
+	var effects: Variant = b.get("effects")
+	if typeof(effects) != TYPE_DICTIONARY:
 		errors.append("%s: effects deve ser um objeto" % ctx)
+	else:
+		for key in effects:
+			if not (key in rules["resources"]) and not rules["effect_names"].has(key):
+				errors.append("%s: efeito desconhecido (%s)" % [ctx, key])
+			elif typeof(effects[key]) != TYPE_FLOAT or effects[key] < 0.0:
+				errors.append("%s: valor inválido em effects.%s" % [ctx, key])
 	_check_id_list(b, "requires", buildings, ctx)
 
 
@@ -309,6 +323,11 @@ func _check_resource_dict(d: Dictionary, field: String, ctx: String, require_all
 		for key in rules["resources"]:
 			if not res.has(key):
 				errors.append("%s: '%s' sem o recurso %s" % [ctx, field, key])
+
+
+func _check_bool(d: Dictionary, field: String, ctx: String) -> void:
+	if typeof(d.get(field)) != TYPE_BOOL:
+		errors.append("%s: campo '%s' deve ser booleano" % [ctx, field])
 
 
 func _is_point(value: Variant) -> bool:
