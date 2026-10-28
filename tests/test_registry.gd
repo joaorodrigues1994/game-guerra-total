@@ -12,8 +12,8 @@ func _valid_raw() -> Dictionary:
 func test_sample_data_loads() -> void:
 	var reg := Registry.new()
 	assert_true(reg.load_from_dir("res://data"), str(reg.errors))
-	assert_eq(reg.countries.size(), 2, "países")
-	assert_eq(reg.provinces.size(), 3, "províncias")
+	assert_eq(reg.countries.size(), 3, "países")
+	assert_eq(reg.provinces.size(), 9, "províncias")
 	assert_eq(reg.units.size(), 3, "unidades")
 	assert_eq(reg.buildings.size(), 6, "construções")
 	assert_eq(reg.errors.size(), 0, "sem erros")

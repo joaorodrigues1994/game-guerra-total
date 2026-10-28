@@ -2,8 +2,28 @@
   "start_year": 1805,
   "start_month": 1,
   "months_per_turn": 1,
+  "map_size": [1000, 600],
   "resources": ["gold", "food", "materials", "manpower", "prestige"],
   "terrains": ["plains", "hills", "mountains", "forest", "river_valley"],
   "unit_categories": ["infantry", "cavalry", "artillery"],
-  "link_types": ["land", "river", "road"]
+  "link_types": ["land", "river", "road"],
+  "resource_names": {
+    "gold": "Ouro",
+    "food": "Alimentos",
+    "materials": "Materiais",
+    "manpower": "População recrutável",
+    "prestige": "Prestígio"
+  },
+  "terrain_names": {
+    "plains": "Planície",
+    "hills": "Colinas",
+    "mountains": "Montanhas",
+    "forest": "Floresta",
+    "river_valley": "Vale fluvial"
+  },
+  "link_type_names": {
+    "land": "Terra",
+    "river": "Rio",
+    "road": "Estrada"
+  }
 }

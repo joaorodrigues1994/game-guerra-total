@@ -2,6 +2,11 @@ extends RefCounted
 ## Carrega e valida os dados estáticos de data/*.json.
 ## Somente leitura e validação: nenhuma regra de jogo vive aqui.
 
+const MapGeometry := preload("res://src/provinces/map_geometry.gd")
+
+## Área mínima (em unidades do mapa) para um polígono não ser considerado degenerado.
+const MIN_POLYGON_AREA := 500.0
+
 const DATA_FILES := {
 	"rules": "rules.json",
 	"countries": "countries.json",
@@ -112,7 +117,25 @@ func _validate_rules(r: Variant) -> bool:
 	for key in ["start_year", "start_month", "months_per_turn"]:
 		if typeof(r.get(key)) != TYPE_FLOAT:
 			errors.append("rules.%s deve ser numérico" % key)
+	var map_size: Variant = r.get("map_size")
+	if not _is_point(map_size) or map_size[0] <= 0 or map_size[1] <= 0:
+		errors.append("rules.map_size deve ser [largura, altura] positivos")
+	if errors.is_empty():
+		_check_names(r, "resource_names", "resources")
+		_check_names(r, "terrain_names", "terrains")
+		_check_names(r, "link_type_names", "link_types")
 	return errors.is_empty()
+
+
+## Todo id da lista deve ter um nome de exibição no dicionário correspondente.
+func _check_names(r: Dictionary, names_field: String, list_field: String) -> void:
+	var names: Variant = r.get(names_field)
+	if typeof(names) != TYPE_DICTIONARY:
+		errors.append("rules.%s deve ser um objeto" % names_field)
+		return
+	for id in r[list_field]:
+		if typeof(names.get(id)) != TYPE_STRING or (names[id] as String).is_empty():
+			errors.append("rules.%s sem nome para '%s'" % [names_field, str(id)])
 
 
 func _validate_country(c: Dictionary) -> void:
@@ -141,7 +164,40 @@ func _validate_province(p: Dictionary) -> void:
 	if city != null and (typeof(city) != TYPE_DICTIONARY or typeof(city.get("name")) != TYPE_STRING):
 		errors.append("%s: city deve ser null ou objeto com name" % ctx)
 	_check_id_list(p, "buildings", buildings, ctx)
+	_validate_map(p, ctx)
 	_validate_neighbors(p, ctx)
+
+
+## Geometria de desenho/seleção: polígono simples dentro do mapa e rótulo dentro do polígono.
+func _validate_map(p: Dictionary, ctx: String) -> void:
+	var map: Variant = p.get("map")
+	if typeof(map) != TYPE_DICTIONARY:
+		errors.append("%s: 'map' deve ser um objeto" % ctx)
+		return
+	var raw_points: Variant = map.get("polygon")
+	if typeof(raw_points) != TYPE_ARRAY or (raw_points as Array).size() < 3:
+		errors.append("%s: map.polygon precisa de ao menos 3 pontos" % ctx)
+		return
+	for point in raw_points:
+		if not _is_point(point):
+			errors.append("%s: map.polygon com ponto inválido (esperado [x, y])" % ctx)
+			return
+	var poly := MapGeometry.to_polygon(raw_points)
+	var size := Vector2(rules["map_size"][0], rules["map_size"][1])
+	for vertex in poly:
+		if vertex.x < 0.0 or vertex.y < 0.0 or vertex.x > size.x or vertex.y > size.y:
+			errors.append("%s: vértice fora do mapa (%s)" % [ctx, str(vertex)])
+			return
+	if MapGeometry.has_duplicate_vertices(poly):
+		errors.append("%s: map.polygon com vértices repetidos" % ctx)
+	elif absf(MapGeometry.signed_area(poly)) < MIN_POLYGON_AREA:
+		errors.append("%s: map.polygon com área degenerada" % ctx)
+	elif not MapGeometry.is_simple(poly):
+		errors.append("%s: map.polygon com auto-interseção" % ctx)
+		return
+	if not _is_point(map.get("label")) \
+			or not Geometry2D.is_point_in_polygon(Vector2(map["label"][0], map["label"][1]), poly):
+		errors.append("%s: map.label ausente ou fora do polígono" % ctx)
 
 
 func _validate_neighbors(p: Dictionary, ctx: String) -> void:
@@ -164,6 +220,27 @@ func _validate_neighbors(p: Dictionary, ctx: String) -> void:
 			continue
 		if not _has_link(provinces[other_id], p["id"], type):
 			errors.append("%s: ligação com %s não é recíproca" % [ctx, other_id])
+		elif not _share_border(p, provinces[other_id]):
+			errors.append("%s: não compartilha fronteira com %s" % [ctx, other_id])
+
+
+## Verdadeiro quando os polígonos (se válidos) têm ao menos uma aresta em comum.
+func _share_border(a: Dictionary, b: Dictionary) -> bool:
+	var poly_a := _polygon_of(a)
+	var poly_b := _polygon_of(b)
+	if poly_a.size() < 3 or poly_b.size() < 3:
+		return true  # geometria inválida já é reportada em _validate_map
+	return not MapGeometry.shared_edges(poly_a, poly_b).is_empty()
+
+
+func _polygon_of(province: Dictionary) -> PackedVector2Array:
+	var map: Variant = province.get("map")
+	if typeof(map) != TYPE_DICTIONARY or typeof(map.get("polygon")) != TYPE_ARRAY:
+		return PackedVector2Array()
+	for point in map["polygon"]:
+		if not _is_point(point):
+			return PackedVector2Array()
+	return MapGeometry.to_polygon(map["polygon"])
 
 
 func _has_link(province: Dictionary, target_id: String, type: String) -> bool:
@@ -232,6 +309,15 @@ func _check_resource_dict(d: Dictionary, field: String, ctx: String, require_all
 		for key in rules["resources"]:
 			if not res.has(key):
 				errors.append("%s: '%s' sem o recurso %s" % [ctx, field, key])
+
+
+func _is_point(value: Variant) -> bool:
+	if typeof(value) != TYPE_ARRAY or (value as Array).size() != 2:
+		return false
+	for coord in value:
+		if typeof(coord) != TYPE_FLOAT and typeof(coord) != TYPE_INT:
+			return false
+	return true
 
 
 func _check_id_list(d: Dictionary, field: String, known: Dictionary, ctx: String) -> void:

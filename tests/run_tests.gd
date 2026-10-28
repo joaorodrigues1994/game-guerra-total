@@ -5,6 +5,11 @@ extends SceneTree
 
 
 func _init() -> void:
+	# O laço principal e a árvore de cena só existem depois de _init; os testes de UI precisam deles.
+	process_frame.connect(_run, CONNECT_ONE_SHOT)
+
+
+func _run() -> void:
 	var total := 0
 	var failed := 0
 	var assertions := 0
@@ -21,10 +26,13 @@ func _init() -> void:
 			if not name.begins_with("test_"):
 				continue
 			var case: RefCounted = script.new()  # instância nova por teste
-			case.call(name)
+			await case.call(name)  # testes podem aguardar frames (ex.: layout de UI)
 			total += 1
 			assertions += case.assertions
-			if case.failures.is_empty():
+			if case.assertions == 0:
+				failed += 1
+				print("FALHA  %s::%s: nenhuma asserção executada (teste abortado?)" % [file, name])
+			elif case.failures.is_empty():
 				print("ok     %s::%s" % [file, name])
 			else:
 				failed += 1

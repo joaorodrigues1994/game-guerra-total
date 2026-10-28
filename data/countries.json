@@ -12,5 +12,12 @@
     "color": "#d8d3c4",
     "capital": "prov_vienna",
     "starting_resources": { "gold": 400, "food": 350, "materials": 150, "manpower": 900, "prestige": 40 }
+  },
+  {
+    "id": "bav",
+    "name": "Baviera",
+    "color": "#2fa39a",
+    "capital": "prov_bavaria",
+    "starting_resources": { "gold": 250, "food": 200, "materials": 120, "manpower": 500, "prestige": 20 }
   }
 ]

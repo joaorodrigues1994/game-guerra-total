@@ -3,7 +3,10 @@
     "id": "prov_paris",
     "name": "Île-de-France",
     "owner": "fra",
-    "neighbors": [{ "id": "prov_strasbourg", "type": "road" }],
+    "neighbors": [
+      { "id": "prov_strasbourg", "type": "road" },
+      { "id": "prov_franconia", "type": "land" }
+    ],
     "population": 60000,
     "production": { "gold": 12, "food": 8, "materials": 5 },
     "economic_value": 10,
@@ -11,7 +14,11 @@
     "city": { "name": "Paris" },
     "buildings": ["market"],
     "garrison": 2000,
-    "strategic_value": 9
+    "strategic_value": 9,
+    "map": {
+      "polygon": [[14, 52], [262, 30], [252, 292], [0, 306]],
+      "label": [130, 175]
+    }
   },
   {
     "id": "prov_strasbourg",
@@ -19,7 +26,7 @@
     "owner": "fra",
     "neighbors": [
       { "id": "prov_paris", "type": "road" },
-      { "id": "prov_vienna", "type": "land" }
+      { "id": "prov_swabia", "type": "river" }
     ],
     "population": 25000,
     "production": { "gold": 5, "food": 6, "materials": 3 },
@@ -28,13 +35,131 @@
     "city": { "name": "Estrasburgo" },
     "buildings": [],
     "garrison": 800,
-    "strategic_value": 7
+    "strategic_value": 7,
+    "map": {
+      "polygon": [[0, 306], [252, 292], [272, 540], [24, 566]],
+      "label": [135, 430]
+    }
+  },
+  {
+    "id": "prov_franconia",
+    "name": "Francônia",
+    "owner": "bav",
+    "neighbors": [
+      { "id": "prov_paris", "type": "land" },
+      { "id": "prov_swabia", "type": "road" },
+      { "id": "prov_bohemia", "type": "land" }
+    ],
+    "population": 30000,
+    "production": { "gold": 5, "food": 6, "materials": 3 },
+    "economic_value": 5,
+    "terrain": "hills",
+    "city": { "name": "Nuremberga" },
+    "buildings": [],
+    "garrison": 600,
+    "strategic_value": 5,
+    "map": {
+      "polygon": [[262, 30], [498, 22], [470, 268], [252, 292]],
+      "label": [370, 160]
+    }
+  },
+  {
+    "id": "prov_swabia",
+    "name": "Suábia",
+    "owner": "bav",
+    "neighbors": [
+      { "id": "prov_strasbourg", "type": "river" },
+      { "id": "prov_franconia", "type": "road" },
+      { "id": "prov_bavaria", "type": "road" }
+    ],
+    "population": 28000,
+    "production": { "gold": 4, "food": 5, "materials": 3 },
+    "economic_value": 4,
+    "terrain": "forest",
+    "city": { "name": "Augsburgo" },
+    "buildings": [],
+    "garrison": 500,
+    "strategic_value": 4,
+    "map": {
+      "polygon": [[252, 292], [470, 268], [482, 524], [272, 540]],
+      "label": [372, 405]
+    }
+  },
+  {
+    "id": "prov_bavaria",
+    "name": "Baviera",
+    "owner": "bav",
+    "neighbors": [
+      { "id": "prov_swabia", "type": "road" },
+      { "id": "prov_bohemia", "type": "land" },
+      { "id": "prov_vienna", "type": "river" }
+    ],
+    "population": 40000,
+    "production": { "gold": 7, "food": 8, "materials": 4 },
+    "economic_value": 7,
+    "terrain": "plains",
+    "city": { "name": "Munique" },
+    "buildings": ["barracks"],
+    "garrison": 1200,
+    "strategic_value": 7,
+    "map": {
+      "polygon": [[470, 268], [700, 302], [702, 424], [682, 546], [482, 524]],
+      "label": [585, 410]
+    }
+  },
+  {
+    "id": "prov_bohemia",
+    "name": "Boêmia",
+    "owner": "aus",
+    "neighbors": [
+      { "id": "prov_franconia", "type": "land" },
+      { "id": "prov_bavaria", "type": "land" },
+      { "id": "prov_moravia", "type": "road" }
+    ],
+    "population": 50000,
+    "production": { "gold": 7, "food": 8, "materials": 5 },
+    "economic_value": 7,
+    "terrain": "mountains",
+    "city": { "name": "Praga" },
+    "buildings": ["workshop"],
+    "garrison": 1000,
+    "strategic_value": 7,
+    "map": {
+      "polygon": [[498, 22], [762, 44], [700, 302], [470, 268]],
+      "label": [595, 160]
+    }
+  },
+  {
+    "id": "prov_moravia",
+    "name": "Morávia",
+    "owner": "aus",
+    "neighbors": [
+      { "id": "prov_bohemia", "type": "road" },
+      { "id": "prov_vienna", "type": "road" },
+      { "id": "prov_hungary", "type": "land" }
+    ],
+    "population": 35000,
+    "production": { "gold": 5, "food": 7, "materials": 3 },
+    "economic_value": 5,
+    "terrain": "plains",
+    "city": { "name": "Brno" },
+    "buildings": [],
+    "garrison": 700,
+    "strategic_value": 5,
+    "map": {
+      "polygon": [[762, 44], [986, 66], [998, 322], [884, 282], [700, 302]],
+      "label": [850, 170]
+    }
   },
   {
     "id": "prov_vienna",
     "name": "Baixa Áustria",
     "owner": "aus",
-    "neighbors": [{ "id": "prov_strasbourg", "type": "land" }],
+    "neighbors": [
+      { "id": "prov_bavaria", "type": "river" },
+      { "id": "prov_moravia", "type": "road" },
+      { "id": "prov_hungary", "type": "river" }
+    ],
     "population": 45000,
     "production": { "gold": 9, "food": 7, "materials": 4 },
     "economic_value": 8,
@@ -42,6 +167,31 @@
     "city": { "name": "Viena" },
     "buildings": ["barracks"],
     "garrison": 1500,
-    "strategic_value": 8
+    "strategic_value": 8,
+    "map": {
+      "polygon": [[700, 302], [884, 282], [870, 562], [682, 546], [702, 424]],
+      "label": [785, 430]
+    }
+  },
+  {
+    "id": "prov_hungary",
+    "name": "Hungria",
+    "owner": "aus",
+    "neighbors": [
+      { "id": "prov_moravia", "type": "land" },
+      { "id": "prov_vienna", "type": "river" }
+    ],
+    "population": 70000,
+    "production": { "gold": 6, "food": 12, "materials": 2 },
+    "economic_value": 7,
+    "terrain": "plains",
+    "city": { "name": "Buda" },
+    "buildings": ["farm"],
+    "garrison": 1100,
+    "strategic_value": 6,
+    "map": {
+      "polygon": [[884, 282], [998, 322], [990, 548], [870, 562]],
+      "label": [935, 430]
+    }
   }
 ]
