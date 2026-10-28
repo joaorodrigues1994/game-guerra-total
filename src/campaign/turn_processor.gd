@@ -3,15 +3,17 @@ extends RefCounted
 ## Cada etapa roda exatamente uma vez por chamada de end_turn.
 
 const EconomyCalculator := preload("res://src/economy/economy_calculator.gd")
+const ArmyActions := preload("res://src/units/army_actions.gd")
 
 const PHASES: Array[StringName] = [
 	&"validate_state",         # valida o estado; se inválido, aborta sem alterar nada
 	&"income_expenses",       # credita receitas e debita manutenção (sobre o estado do início do turno)
 	&"construction_progress", # avança e conclui construções
-	&"recruitment",           # avança recrutamentos e cria as unidades concluídas
+	&"recruitment",           # avança recrutamentos; unidades concluídas entram em exércitos
 	&"ai_actions",            # (futuro) ações dos países controlados pela IA
-	&"military_movement",     # (futuro) movimentações militares
+	&"military_movement",     # (futuro) ordens de movimento enfileiradas; hoje as ordens são imediatas
 	&"advance_turn",          # incrementa o número do turno
+	&"army_reset",            # novo turno: libera a movimentação e descarta encontros que não se aplicam mais
 	&"events",                # notifica a interface (turn_ended)
 ]
 
@@ -67,6 +69,9 @@ func _run_phase(phase: StringName, registry: RefCounted, state: RefCounted, repo
 		&"advance_turn":
 			state.turn += 1
 			report["turn_after"] = state.turn
+		&"army_reset":
+			ArmyActions.reset_movement(state)
+			ArmyActions.refresh_encounters(state)
 		&"events":
 			if bus != null and bus.has_signal("turn_ended"):
 				bus.turn_ended.emit(state.turn)
@@ -99,6 +104,35 @@ func validate_state(registry: RefCounted, state: RefCounted) -> PackedStringArra
 	for unit in state.units:
 		if not registry.units.has(unit["type"]) or not state.provinces.has(unit["province"]):
 			problems.append("Unidade inválida: %s" % str(unit["id"]))
+	problems.append_array(_validate_armies(state))
+	return problems
+
+
+## Exércitos: dono e província válidos, unidades existentes e do dono (cada uma em um único exército)
+## e generais válidos, do mesmo país e comandando no máximo um exército.
+func _validate_armies(state: RefCounted) -> PackedStringArray:
+	var problems := PackedStringArray()
+	var seen_units := {}
+	var seen_generals := {}
+	for army_id in state.armies:
+		var army: Dictionary = state.armies[army_id]
+		if not state.countries.has(army["owner"]) or not state.provinces.has(army["province"]):
+			problems.append("Exército com dono ou província inválidos: %s" % str(army_id))
+			continue
+		for unit_id in army["units"]:
+			var unit: Dictionary = state.unit_by_id(unit_id)
+			if unit.is_empty() or unit["owner"] != army["owner"]:
+				problems.append("Exército %s referencia unidade inválida: %s" % [str(army_id), str(unit_id)])
+			elif seen_units.has(unit_id):
+				problems.append("Unidade %s está em mais de um exército" % str(unit_id))
+			seen_units[unit_id] = true
+		var general_id: String = army["general"]
+		if not general_id.is_empty():
+			if not state.generals.has(general_id) or state.generals[general_id]["owner"] != army["owner"]:
+				problems.append("Exército %s tem general inválido: %s" % [str(army_id), general_id])
+			elif seen_generals.has(general_id):
+				problems.append("General %s comanda mais de um exército" % general_id)
+			seen_generals[general_id] = true
 	return problems
 
 
@@ -151,16 +185,10 @@ func _recruitment_progress(registry: RefCounted, state: RefCounted, report: Dict
 		for entry in province["recruitments"]:
 			entry["remaining"] -= 1
 			if entry["remaining"] <= 0:
-				var unit := {
-					"id": state.next_unit_id,
-					"type": entry["unit"],
-					"owner": province["owner"],
-					"province": province_id,
-					"strength": int(registry.units[entry["unit"]]["strength"]),
-				}
-				state.next_unit_id += 1
-				state.units.append(unit)
-				report["completed_units"].append({"province": province_id, "unit": entry["unit"], "id": unit["id"]})
+				var unit_id: int = state.add_unit(registry, entry["unit"], province["owner"], province_id)
+				var army_id := ArmyActions.incorporate_new_unit(registry, state, unit_id)
+				report["completed_units"].append(
+					{"province": province_id, "unit": entry["unit"], "id": unit_id, "army": army_id})
 			else:
 				pending.append(entry)
 		province["recruitments"] = pending

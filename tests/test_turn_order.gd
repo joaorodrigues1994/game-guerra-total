@@ -12,6 +12,7 @@ const EXPECTED_ORDER: Array[StringName] = [
 	&"ai_actions",
 	&"military_movement",
 	&"advance_turn",
+	&"army_reset",
 	&"events",
 ]
 

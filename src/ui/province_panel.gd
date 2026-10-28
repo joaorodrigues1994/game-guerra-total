@@ -21,6 +21,10 @@ var recruitments_label: Label
 var units_label: Label
 var connections_label: Label
 var actions_note_label: Label
+var encounter_label: Label
+## id do exército / da unidade de guarnição -> botão, reconstruídos a cada atualização.
+var army_buttons: Dictionary = {}
+var form_army_buttons: Dictionary = {}
 var clear_button: Button
 ## id da construção/unidade -> botão, reconstruídos a cada atualização.
 var build_buttons: Dictionary = {}
@@ -29,6 +33,7 @@ var recruit_buttons: Dictionary = {}
 var _owner_swatch: ColorRect
 var _content: VBoxContainer
 var _actions: VBoxContainer
+var _military: VBoxContainer
 var _province_id: String = ""
 
 
@@ -68,8 +73,14 @@ func _init() -> void:
 
 	capital_label = UiStyle.make_label(14, UiStyle.ACCENT, true)
 	_content.add_child(capital_label)
+	encounter_label = UiStyle.make_label(14, UiStyle.ERROR, true)
+	_content.add_child(encounter_label)
 	info_label = UiStyle.make_label(15, UiStyle.TEXT, true)
 	_content.add_child(info_label)
+	# Exércitos presentes e unidades de guarnição, logo abaixo dos dados básicos.
+	_military = VBoxContainer.new()
+	_military.add_theme_constant_override("separation", 4)
+	_content.add_child(_military)
 	# Ações logo abaixo dos dados básicos, para ficarem visíveis sem rolar o painel.
 	_actions = VBoxContainer.new()
 	_actions.add_theme_constant_override("separation", 4)
@@ -79,7 +90,7 @@ func _init() -> void:
 	recruitments_label = _add_section("Recrutamentos em andamento")
 	buildings_label = _add_section("Construções concluídas")
 	production_label = _add_section("Receita por turno")
-	units_label = _add_section("Unidades recrutadas")
+	units_label = _add_section("Unidades na província")
 
 	connections_label = _add_section("Conexões")
 
@@ -95,6 +106,7 @@ func bind(p_controller: CampaignController) -> void:
 	controller = p_controller
 	controller.selection_changed.connect(func(_id: String) -> void: _refresh())
 	controller.state_changed.connect(_refresh)
+	controller.army_selection_changed.connect(func(_id: int) -> void: _refresh())
 	_refresh()
 
 
@@ -109,6 +121,7 @@ func show_province(view: Dictionary) -> void:
 	empty_label.visible = not has_view
 	clear_button.disabled = not has_view
 	_clear_actions()
+	_clear_military()
 	if not has_view:
 		_province_id = ""
 		return
@@ -131,6 +144,8 @@ func show_province(view: Dictionary) -> void:
 	if view["defense_bonus"] > 0:
 		info.append("Bônus defensivo: +%d" % view["defense_bonus"])
 	info_label.text = "\n".join(info)
+	encounter_label.visible = not view["encounters"].is_empty()
+	encounter_label.text = "\n".join(PackedStringArray(view["encounters"]))
 
 	var income := PackedStringArray()
 	for entry in view["income"]:
@@ -153,6 +168,7 @@ func show_province(view: Dictionary) -> void:
 		links.append("%s (%s)" % [neighbor["name"], neighbor["link"]])
 	connections_label.text = _lines_or(links, "Nenhuma")
 
+	_build_military(view)
 	_build_actions(view)
 
 
@@ -165,6 +181,58 @@ static func format_int(value: int) -> String:
 			out += "."
 		out += digits[i]
 	return ("-" if value < 0 else "") + out
+
+
+# --- Exércitos e guarnição ---------------------------------------------------
+
+func _build_military(view: Dictionary) -> void:
+	if not view["armies"].is_empty():
+		_military_heading("Exércitos na província")
+	for army in view["armies"]:
+		var tag := "seu" if army["is_player"] else "estrangeiro (%s)" % army["owner_name"]
+		var button := Button.new()
+		button.text = "%s — %s" % [army["name"], tag]
+		button.clip_text = true
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.tooltip_text = "Selecionar este exército"
+		button.pressed.connect(controller.select_army.bind(army["id"]))
+		_military.add_child(button)
+		army_buttons[army["id"]] = button
+		var detail := "%d unidades · %s homens%s" % [army["unit_count"], format_int(army["strength"]),
+			" · encontro pendente" if army["engaged"] else ""]
+		_military_note(detail)
+	if not view["garrison_units"].is_empty():
+		_military_heading("Guarnição (unidades fora de exércitos)")
+	for unit in view["garrison_units"]:
+		var button := Button.new()
+		button.text = "Formar exército: %s #%d (%s homens)" % [unit["name"], unit["id"], format_int(unit["strength"])]
+		button.clip_text = true
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.disabled = not unit["reason"].is_empty()
+		button.tooltip_text = unit["reason"]
+		button.pressed.connect(controller.form_army.bind(view["id"], unit["id"]))
+		_military.add_child(button)
+		form_army_buttons[unit["id"]] = button
+
+
+func _military_heading(text: String) -> void:
+	var label := UiStyle.make_label(13, UiStyle.TEXT_DIM)
+	label.text = text.to_upper()
+	_military.add_child(label)
+
+
+func _military_note(text: String) -> void:
+	var label := UiStyle.make_label(13, UiStyle.TEXT_DIM, true)
+	label.text = text
+	_military.add_child(label)
+
+
+func _clear_military() -> void:
+	army_buttons = {}
+	form_army_buttons = {}
+	for child in _military.get_children():
+		_military.remove_child(child)
+		child.queue_free()
 
 
 # --- Ações ------------------------------------------------------------------

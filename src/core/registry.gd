@@ -13,6 +13,8 @@ const DATA_FILES := {
 	"provinces": "provinces.json",
 	"units": "units.json",
 	"buildings": "buildings.json",
+	"generals": "generals.json",
+	"armies": "armies.json",
 }
 
 var rules: Dictionary = {}
@@ -20,6 +22,9 @@ var countries: Dictionary = {}  # id -> definição
 var provinces: Dictionary = {}
 var units: Dictionary = {}
 var buildings: Dictionary = {}
+var generals: Dictionary = {}
+## Exércitos iniciais (lista, na ordem do arquivo). O GameState cria as instâncias.
+var armies: Array = []
 
 var errors: PackedStringArray = PackedStringArray()
 ## Dados brutos da última leitura de diretório (útil para testes).
@@ -62,6 +67,7 @@ func load_from_data(raw: Dictionary) -> bool:
 	provinces = _index(raw["provinces"], "província")
 	units = _index(raw["units"], "unidade")
 	buildings = _index(raw["buildings"], "construção")
+	generals = _index(raw["generals"], "general")
 
 	for id in buildings:
 		_validate_building(buildings[id])
@@ -71,6 +77,9 @@ func load_from_data(raw: Dictionary) -> bool:
 		_validate_province(provinces[id])
 	for id in units:
 		_validate_unit(units[id])
+	for id in generals:
+		_validate_general(generals[id])
+	_validate_armies(raw["armies"])
 	return errors.is_empty()
 
 
@@ -80,6 +89,8 @@ func _reset() -> void:
 	provinces = {}
 	units = {}
 	buildings = {}
+	generals = {}
+	armies = []
 	errors = PackedStringArray()
 
 
@@ -122,6 +133,7 @@ func _validate_rules(r: Variant) -> bool:
 		errors.append("rules.map_size deve ser [largura, altura] positivos")
 	_check_number(r, "max_concurrent_constructions", "rules", 1.0)
 	_check_number(r, "manpower_rate", "rules")
+	_check_number(r, "max_army_units", "rules", 1.0)
 	if typeof(r.get("effect_names")) != TYPE_DICTIONARY:
 		errors.append("rules.effect_names deve ser um objeto")
 	if errors.is_empty():
@@ -291,6 +303,59 @@ func _validate_building(b: Dictionary) -> void:
 			elif typeof(effects[key]) != TYPE_FLOAT or effects[key] < 0.0:
 				errors.append("%s: valor inválido em effects.%s" % [ctx, key])
 	_check_id_list(b, "requires", buildings, ctx)
+
+
+func _validate_general(g: Dictionary) -> void:
+	var ctx := "general %s" % g["id"]
+	_require_string(g, "name", ctx)
+	if typeof(g.get("nationality")) != TYPE_STRING or not countries.has(g["nationality"]):
+		errors.append("%s: nacionalidade inexistente (%s)" % [ctx, str(g.get("nationality"))])
+	_check_number(g, "command", ctx, 1.0)
+	_check_number(g, "experience", ctx)
+
+
+## Exércitos iniciais: dono, província própria, unidades conhecidas dentro do limite e general livre.
+func _validate_armies(entries: Variant) -> void:
+	if typeof(entries) != TYPE_ARRAY:
+		errors.append("Lista de exércitos deve ser um array")
+		return
+	armies = entries
+	var used_generals := {}
+	for i in entries.size():
+		var a: Variant = entries[i]
+		var ctx := "exército inicial #%d" % (i + 1)
+		if typeof(a) != TYPE_DICTIONARY:
+			errors.append("%s: não é um objeto" % ctx)
+			continue
+		_require_string(a, "name", ctx)
+		var owner_id: Variant = a.get("owner")
+		if typeof(owner_id) != TYPE_STRING or not countries.has(owner_id):
+			errors.append("%s: dono inexistente (%s)" % [ctx, str(owner_id)])
+			continue
+		var province_id: Variant = a.get("province")
+		if typeof(province_id) != TYPE_STRING or not provinces.has(province_id):
+			errors.append("%s: província inexistente (%s)" % [ctx, str(province_id)])
+		elif provinces[province_id].get("owner") != owner_id:
+			errors.append("%s: deve começar em província do próprio país" % ctx)
+		var members: Variant = a.get("units")
+		if typeof(members) != TYPE_ARRAY or (members as Array).is_empty():
+			errors.append("%s: units deve ser uma lista não vazia" % ctx)
+		else:
+			if members.size() > int(rules["max_army_units"]):
+				errors.append("%s: excede o limite de %d unidades" % [ctx, int(rules["max_army_units"])])
+			for unit_id in members:
+				if typeof(unit_id) != TYPE_STRING or not units.has(unit_id):
+					errors.append("%s: unidade desconhecida (%s)" % [ctx, str(unit_id)])
+		var general_id: Variant = a.get("general")
+		if general_id != null:
+			if typeof(general_id) != TYPE_STRING or not generals.has(general_id):
+				errors.append("%s: general desconhecido (%s)" % [ctx, str(general_id)])
+			elif generals[general_id].get("nationality") != owner_id:
+				errors.append("%s: general de outra nacionalidade (%s)" % [ctx, general_id])
+			elif used_generals.has(general_id):
+				errors.append("%s: general já comanda outro exército (%s)" % [ctx, general_id])
+			else:
+				used_generals[general_id] = true
 
 
 # --- Auxiliares ------------------------------------------------------------

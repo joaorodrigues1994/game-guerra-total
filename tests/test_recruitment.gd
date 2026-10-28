@@ -26,7 +26,7 @@ func test_valid_recruitment_deducts_all_costs_and_queues() -> void:
 	assert_eq(res["materials"], 180, "200 - 20")
 	assert_eq(res["manpower"], 500, "1000 - 500")
 	assert_eq(game["state"].provinces["prov_paris"]["recruitments"], [{"unit": INFANTRY, "remaining": 2}], "fila")
-	assert_true(game["state"].units.is_empty(), "ainda não existe unidade")
+	assert_true(units_of(game["state"], "fra").is_empty(), "ainda não existe unidade")
 
 
 func test_recruitment_progresses_and_unit_appears_on_expected_turn() -> void:
@@ -36,10 +36,10 @@ func test_recruitment_progresses_and_unit_appears_on_expected_turn() -> void:
 	assert_true(_recruit(game, "prov_paris", INFANTRY)["ok"], "2 turnos")
 	_end_turn(game, processor)
 	assert_eq(state.provinces["prov_paris"]["recruitments"][0]["remaining"], 1, "1 turno restante")
-	assert_true(state.units.is_empty(), "ainda sem unidade")
+	assert_true(units_of(state, "fra").is_empty(), "ainda sem unidade")
 	var report := _end_turn(game, processor)
-	assert_eq(state.units.size(), 1, "unidade disponível no 2º encerramento")
-	var unit: Dictionary = state.units[0]
+	assert_eq(units_of(state, "fra").size(), 1, "unidade disponível no 2º encerramento")
+	var unit: Dictionary = units_of(state, "fra")[0]
 	assert_eq(unit["type"], INFANTRY, "tipo")
 	assert_eq(unit["owner"], "fra", "dono")
 	assert_eq(unit["province"], "prov_paris", "província de origem")
@@ -57,8 +57,9 @@ func test_unit_ids_are_unique() -> void:
 	assert_true(_recruit(game, "prov_paris", INFANTRY)["ok"], "segunda (capacidade 2)")
 	_end_turn(game, processor)
 	_end_turn(game, processor)
-	assert_eq(game["state"].units.size(), 2, "duas unidades")
-	assert_true(game["state"].units[0]["id"] != game["state"].units[1]["id"], "ids distintos")
+	var fra_units := units_of(game["state"], "fra")
+	assert_eq(fra_units.size(), 2, "duas unidades")
+	assert_true(fra_units[0]["id"] != fra_units[1]["id"], "ids distintos")
 
 
 func test_province_without_barracks_is_rejected_without_changes() -> void:

@@ -18,20 +18,22 @@ Documento vivo. Estado atual: **Fase 0 (Fundação)**.
 | `core/` | `GameState` (estado mutável), `EventBus` (autoload), `Registry` (carga e validação) | Fase 0/1 |
 | `campaign/` | `TurnProcessor` (turno), `CampaignActions` (construir/recrutar), `CampaignController` (seleção, ações, dados de exibição) | Fase 1/campanha |
 | `economy/` | `EconomyCalculator` (receitas, manutenção, bônus; só leitura) | campanha |
-| `units/` | unidades, exércitos, generais | vazio (Fase 1/3) |
+| `units/` | `ArmyActions` (exércitos, generais, movimentação, encontros) | exércitos |
 | `provinces/` | `MapGeometry` (geometria pura), `ProvinceMap` (polígonos, teste de clique, fronteiras) | Fase 1 |
 | `battle/` | grade hexagonal, resolução de combate | vazio (Fase 2) |
-| `ui/` | `MapView`, `ProvincePanel`, `TopBar`, `StatusBar`, `CampaignScreen` (leem o estado e chamam o controlador) | Fase 1/campanha |
+| `ui/` | `MapView` (mapa e marcadores), `ProvincePanel`, `ArmyPanel`, `TopBar`, `StatusBar`, `CampaignScreen` (leem o estado e chamam o controlador) | Fase 1/campanha/exércitos |
 
 ## Dados (`data/`)
 
 | Arquivo | Conteúdo |
 |---|---|
-| `rules.json` | data inicial, recursos, terrenos, categorias, tipos de ligação, `max_concurrent_constructions`, `manpower_rate`, nomes de exibição (`resource_names`, `terrain_names`, `link_type_names`, `effect_names`) |
+| `rules.json` | data inicial, recursos, terrenos, categorias, tipos de ligação, `max_concurrent_constructions`, `max_army_units`, `manpower_rate`, nomes de exibição (`resource_names`, `terrain_names`, `link_type_names`, `effect_names`) |
 | `countries.json` | id, nome, cor, capital, recursos iniciais |
 | `provinces.json` | dono, vizinhos tipados, população, produção, terreno, cidade, construções, guarnição, valor estratégico |
 | `units.json` | custos, manutenção, efetivo, ataque, defesa, mobilidade, alcance, moral, experiência, requisitos, `recruitable`, `recruit_turns` |
 | `buildings.json` | custo, duração (`build_turns`), efeitos, requisitos (`requires`), `buildable` |
+| `generals.json` | id, nome, nacionalidade, `command` (habilidade), `experience` (informativos nesta etapa) |
+| `armies.json` | exércitos iniciais: nome, dono, província própria, lista de tipos de unidade e general opcional |
 
 Os arquivos atuais são **dados de exemplo** (3 países, 9 províncias, 3 unidades, 6 construções). O mapa é inspirado na Europa Central de 1805, mas **fronteiras e valores não são uma representação histórica rigorosa**.
 
@@ -61,9 +63,7 @@ Os JSON numéricos são lidos como `float` pelo Godot; ao usar valores como inte
 Além do dono, população, construções concluídas e guarnição, cada província tem duas filas:
 `constructions` (`[{building, remaining}]`) e `recruitments` (`[{unit, remaining}]`), com os turnos restantes.
 Cada país tem `resources` (`gold`, `food`, `materials`, `manpower`, `prestige`, todos inteiros, nunca negativos).
-`units` é a lista de unidades recrutadas (`{id, type, owner, province, strength}`); `province` é a **província de origem**.
-É a representação mínima: no futuro as unidades serão agrupadas em exércitos (com general e posição) sem mudar o resto do estado,
-bastando acrescentar um `army_id` à unidade ou uma lista de exércitos que referencie os ids. Não há movimentação nesta etapa.
+Unidades, exércitos e generais estão descritos em "Exércitos, generais e movimentação" abaixo.
 
 ### Regras econômicas (EconomyCalculator)
 
@@ -82,20 +82,48 @@ Toda ação valida **antes** de alterar o estado; se falhar, nada muda e devolve
 - **Recrutar:** província própria; unidade `recruitable` (só Infantaria de linha); construções exigidas (`requirements.buildings`, o Quartel) concluídas; capacidade livre (`recruit_capacity`: o Quartel dá 2 vagas); recursos suficientes (inclui `manpower`). Depois: desconta o custo e entra na fila com `recruit_turns`.
 - Paris começa com Quartel para o recrutamento ficar disponível desde o turno 1; as demais províncias precisam construir um.
 
+### Exércitos, generais e movimentação
+
+**Estado (GameState)** — fonte única, sem cópias paralelas:
+
+- `units`: **instâncias** de unidade `{id, type, owner, province, strength, morale, experience}`. `id` é inteiro, único e estável na campanha, distinto de `type` (o id da definição em `units.json`). Nome, ataque etc. **não** são copiados: vêm do `Registry`. `province` é a província de guarnição (só vale fora de exércitos; ao sair de um exército passa a ser a província dele).
+- `armies`: `{id, name, owner, province, units, general, moved}`. `units` (ids de instâncias) é a **única** fonte de "quem está em qual exército"; `general` (id ou `""`) é a única fonte de "quem comanda qual exército". Efetivo total = soma de `strength` das unidades (calculado, nunca armazenado). `moved` marca o movimento do turno.
+- `generals`: `{owner, experience}` por id; nome e comando vêm do Registry. Atributos apenas informativos (sem bônus de combate).
+- `encounters`: contrato de encontro `{id, province, turn, initiator, armies, countries}`, base de um futuro `BattleRequest`.
+- Consultas: `armies_in(província[, país])`, `army_of_unit`, `location_of_unit`, `units_in`, `garrison_units`, `army_strength`, `army_of_general`, `encounter_of_army`.
+- O `garrison` numérico da província (guarnição abstrata do mapa) continua separado; "guarnição" no painel militar são as **unidades fora de exércitos**.
+
+**Dados iniciais:** `armies.json` cria exércitos (e suas unidades-instância) de Áustria e Baviera; a França começa sem exército e forma o primeiro recrutando. `rules.max_army_units` (4) é o limite configurável de unidades por exército.
+
+**Incorporação de recrutas:** a unidade concluída entra no primeiro exército (por id) do mesmo país, na mesma província, com vaga e fora de encontro; se não houver, forma-se um novo exército com ela ("Exército de <província>"). Nenhuma unidade fica sem exército nem desaparece. Unidades de guarnição (resultado de "Separar") podem ser incorporadas ou formar novo exército por ação do jogador.
+
+**Organização (ArmyActions):** `add_unit_to_army` (mesma província, mesmo dono, unidade fora de exército, vaga), `detach_unit` (vai para a guarnição da província do exército; se o exército esvaziar, é desfeito e o general, liberado; exige território próprio e exército fora de encontro), `form_army`, `assign_general`/`unassign_general` (general do mesmo país, livre; exército sem general). Tudo valida antes de alterar o estado.
+
+**Regras de movimentação** (sem guerra/diplomacia):
+
+1. Só por conexões do grafo lógico de províncias (`neighbors`), nunca por coordenadas visuais.
+2. No máximo **1 província por exército por turno** (`moved`); a ordem é imediata e só é executada uma vez.
+3. Só se pode ordenar exércitos do próprio país, e só entrar em províncias do **próprio país** ("sem acesso ao território" caso contrário: não há guerra declarada nem acordos de passagem). Invasões ficam para quando houver guerra.
+4. Ordem inválida (exército/destino inexistente, não conectado, estrangeiro, sem acesso, já movido, em encontro) não altera o estado e devolve o motivo.
+5. **Encontros:** se, depois do movimento, há exército de outro país na província de destino, registra-se (ou amplia-se) um encontro em `state.encounters`. Os exércitos envolvidos ficam **parados** (não se movem nem se reorganizam) até o encontro deixar de existir. O movimento nunca é tratado como pacífico: a mensagem avisa e o marcador mostra "!". Sem guerra, isso só ocorre se um exército estrangeiro já estiver em território próprio; a resolução (batalha) virá depois.
+
+**Interface:** marcadores (um por exército, número = unidades; borda dourada = seu, vermelha = estrangeiro, branca = selecionado, "!" = encontro; no máximo 6 por província, o último vira "+N") desenhados sobre o mapa; clique no marcador seleciona o exército e a província dele; a lista completa fica no painel da província. Clique na província mantém o exército só se ele estiver nela; clicar no mar, botão direito ou Esc limpam tudo. O `ArmyPanel` mostra composição, general, estado de movimento e botões de destino (com o motivo quando bloqueados); destinos livres do exército selecionado são realçados em verde no mapa.
+
 ### Ordem de processamento do turno
 
 Fixa e coberta por `tests/test_turn_order.gd`. Qualquer mudança exige atualizar este documento e o teste. Cada etapa roda **uma vez** por chamada de `end_turn`; chamadas reentrantes (por exemplo, de um handler de sinal) são rejeitadas.
 
-1. `validate_state` — verifica recursos (inteiros, >= 0), filas e referências; se houver erro, aborta **sem alterar nada** (`report.ok = false`).
+1. `validate_state` — verifica recursos (inteiros, >= 0), filas, referências, exércitos (dono/província, unidade em no máximo um exército, general válido e comandando um só exército); se houver erro, aborta **sem alterar nada** (`report.ok = false`).
 2. `income_expenses` — credita receitas e debita manutenção de **todos** os países, sobre o estado do início do turno.
 3. `construction_progress` — reduz `remaining`; ao chegar a 0, a construção é concluída.
-4. `recruitment` — reduz `remaining`; ao chegar a 0, cria a unidade em `state.units`.
+4. `recruitment` — reduz `remaining`; ao chegar a 0, cria a instância em `state.units` e a incorpora a um exército (regra acima).
 5. `ai_actions` — (futuro) ações dos países controlados pela IA; vazio.
-6. `military_movement` — (futuro) vazio.
+6. `military_movement` — (futuro) ordens de movimento enfileiradas; hoje as ordens são imediatas (no momento em que o jogador as dá), então a etapa está vazia.
 7. `advance_turn` — `state.turn += 1`.
-8. `events` — emite `EventBus.turn_ended(novo_turno)`.
+8. `army_reset` — novo turno: `moved = false` em todos os exércitos e descarte dos encontros que já não se aplicam (menos de dois países na província).
+9. `events` — emite `EventBus.turn_ended(novo_turno)`.
 
-Justificativas das mudanças em relação à ordem da Fase 0: `supply_upkeep` foi absorvida por `income_expenses` (receita e manutenção formam um único balanço do turno); foi adicionada `validate_state` no início e `advance_turn` antes de `events`, para a interface já receber o turno novo. Como a receita é calculada **antes** das etapas 3 e 4, uma construção concluída (ou unidade criada) neste turno só rende (ou custa manutenção) a partir do próximo: não há receita retroativa. Uma construção de N turnos iniciada no turno T conclui no N-ésimo encerramento e rende a partir do encerramento seguinte.
+`army_reset` fica depois de `advance_turn` porque o reinício pertence ao **início do novo turno**; antes dela o exército já usou seu movimento, depois dela pode se mover de novo. Justificativas das mudanças em relação à ordem da Fase 0: `supply_upkeep` foi absorvida por `income_expenses` (receita e manutenção formam um único balanço do turno); foi adicionada `validate_state` no início e `advance_turn` antes de `events`, para a interface já receber o turno novo. Como a receita é calculada **antes** das etapas 3 e 4, uma construção concluída (ou unidade criada) neste turno só rende (ou custa manutenção) a partir do próximo: não há receita retroativa. Uma construção de N turnos iniciada no turno T conclui no N-ésimo encerramento e rende a partir do encerramento seguinte.
 
 Eventos: `EventBus.turn_phase_processed(fase)` a cada etapa e `turn_ended`; o `CampaignController` emite `state_changed`, `turn_ended(relatório)` e `message_posted(texto, é_erro)` para a interface.
 

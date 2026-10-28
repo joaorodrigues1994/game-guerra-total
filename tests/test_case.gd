@@ -35,3 +35,12 @@ func new_game(player_country_id: String = "fra") -> Dictionary:
 	var state := GameState.new()
 	assert_true(state.setup_from_registry(registry, player_country_id), "estado inicial")
 	return {"registry": registry, "state": state}
+
+
+## Unidades de um país (a partida inicial já tem exércitos de Áustria e Baviera).
+func units_of(state: RefCounted, country_id: String) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for unit in state.units:
+		if unit["owner"] == country_id:
+			result.append(unit)
+	return result

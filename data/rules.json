@@ -3,6 +3,7 @@
   "start_month": 1,
   "months_per_turn": 1,
   "max_concurrent_constructions": 1,
+  "max_army_units": 4,
   "manpower_rate": 0.002,
   "map_size": [1000, 600],
   "resources": ["gold", "food", "materials", "manpower", "prestige"],

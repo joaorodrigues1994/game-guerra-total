@@ -1,0 +1,7 @@
+[
+  { "id": "gen_davout", "name": "Louis-Nicolas Davout", "nationality": "fra", "command": 9, "experience": 6 },
+  { "id": "gen_ney", "name": "Michel Ney", "nationality": "fra", "command": 8, "experience": 5 },
+  { "id": "gen_charles", "name": "Arquiduque Carlos", "nationality": "aus", "command": 8, "experience": 5 },
+  { "id": "gen_mack", "name": "Karl Mack", "nationality": "aus", "command": 4, "experience": 2 },
+  { "id": "gen_wrede", "name": "Carl Philipp von Wrede", "nationality": "bav", "command": 6, "experience": 4 }
+]

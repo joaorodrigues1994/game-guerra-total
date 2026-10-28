@@ -3,6 +3,7 @@ extends Control
 
 const CampaignController := preload("res://src/campaign/campaign_controller.gd")
 const MapView := preload("res://src/ui/map_view.gd")
+const ArmyPanel := preload("res://src/ui/army_panel.gd")
 const ProvincePanel := preload("res://src/ui/province_panel.gd")
 const StatusBar := preload("res://src/ui/status_bar.gd")
 const TopBar := preload("res://src/ui/top_bar.gd")
@@ -12,6 +13,7 @@ var top_bar: PanelContainer
 var map_view: Control
 var status_bar: PanelContainer
 var province_panel: PanelContainer
+var army_panel: PanelContainer
 
 
 func setup(p_controller: CampaignController) -> void:
@@ -47,10 +49,23 @@ func setup(p_controller: CampaignController) -> void:
 	status_bar.bind(controller)
 	left.add_child(status_bar)
 
+	# Coluna lateral: painel da província e, quando há exército selecionado, o painel do exército.
+	var side := VBoxContainer.new()
+	side.add_theme_constant_override("separation", 0)
+	body.add_child(side)
+
 	province_panel = ProvincePanel.new()
+	province_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	province_panel.size_flags_stretch_ratio = 1.0
 	province_panel.bind(controller)
 	province_panel.clear_requested.connect(controller.clear_selection)
-	body.add_child(province_panel)
+	side.add_child(province_panel)
+
+	army_panel = ArmyPanel.new()
+	army_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	army_panel.size_flags_stretch_ratio = 1.3
+	army_panel.bind(controller)
+	side.add_child(army_panel)
 
 
 func _unhandled_input(event: InputEvent) -> void:

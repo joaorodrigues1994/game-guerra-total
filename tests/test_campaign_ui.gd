@@ -198,7 +198,7 @@ func test_recruit_button_then_end_turn_button_flow() -> void:
 	assert_true("1 turno" in panel.recruitments_label.text, "progresso visível: " + panel.recruitments_label.text)
 
 	screen.top_bar.end_turn_button.pressed.emit()
-	assert_true(main.state.units.size() == 1, "unidade criada no estado")
+	assert_eq(units_of(main.state, "fra").size(), 1, "unidade criada no estado")
 	assert_true("Infantaria de linha × 1 (500 homens)" in panel.units_label.text, panel.units_label.text)
 	assert_true("Unidade pronta" in screen.status_bar.message_label.text, "aviso de unidade pronta")
 	screen.top_bar.end_turn_button.pressed.emit()

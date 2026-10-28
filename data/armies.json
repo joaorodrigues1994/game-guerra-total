@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Exército da Boêmia",
+    "owner": "aus",
+    "province": "prov_bohemia",
+    "units": ["unit_line_inf", "unit_line_inf"],
+    "general": "gen_charles"
+  },
+  {
+    "name": "Reserva de Viena",
+    "owner": "aus",
+    "province": "prov_vienna",
+    "units": ["unit_line_inf"],
+    "general": null
+  },
+  {
+    "name": "Exército Bávaro",
+    "owner": "bav",
+    "province": "prov_bavaria",
+    "units": ["unit_line_inf", "unit_line_inf"],
+    "general": "gen_wrede"
+  }
+]
