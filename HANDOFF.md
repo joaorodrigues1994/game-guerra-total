@@ -19,8 +19,9 @@ Instruções permanentes: `CLAUDE.md`. Desenho do jogo: `GAME_DESIGN.md`. Decis�
 | `6fa235f` | Exércitos, generais e movimentação estratégica |
 | `8c4e6ce` | Docs: HANDOFF.md e CLAUDE.md |
 | `1a5e409` | Batalha tática: primeira batalha jogável (independente da campanha) |
+| `ff38999` | Batalha: corrige retirada bloqueada por unidades aliadas (Etapa 1 da integração) |
 
-**Alterações atuais NÃO commitadas (Etapa 1 da integração campanha↔batalha):** correção do defeito de retirada bloqueada por aliadas (`src/battle/battle_turns.gd`), testes novos (`tests/test_battle_retreat.gd`, 14 testes) e uma pequena robustez no executor de testes (`tests/run_tests.gd`). Aguardam a validação manual do usuário e a autorização de commit.
+**Alterações atuais NÃO commitadas (Etapa 2 da integração campanha↔batalha — API de cenários em memória):** `BattleState.setup_from_scenario`, `BattleRegistry.validate_scenario`, `source_id` opcional por unidade, `tests/test_battle_scenario.gd` (18 testes). Aguardam revisão e autorização de commit.
 
 ## Estado por funcionalidade
 
@@ -33,8 +34,9 @@ Legenda: **Validada** = testes automatizados passando *e* o usuário confirmou m
 | Economia, construções, recrutamento de infantaria | **Validada** |
 | Exércitos, generais, movimentação, encontros, marcadores no mapa | **Testada** (validação manual do usuário não registrada; o commit foi autorizado) |
 | **Batalha tática** (hexágonos, terrenos, turnos, movimento, ataques, moral, retirada, vitória, IA básica, reinício, interface) | **Validada** (o usuário a testou manualmente e a considerou aceitável); commitada em `1a5e409` |
-| Correção da retirada bloqueada por aliadas (Etapa 1 da integração) | **Testada** (14 testes novos; os novos falham no código antigo). **Aguarda validação manual; não commitada** |
-| Integração campanha↔batalha (iniciar a batalha a partir de um encontro, aplicar baixas) | **Plano aprovado (decisões D1–D8, abaixo); Etapas 2 a 6 NÃO implementadas.** Só o contrato existe. Conquista/retirada do perdedor: fora de escopo |
+| Correção da retirada bloqueada por aliadas (Etapa 1 da integração) | **Validada** (o usuário validou manualmente); commitada em `ff38999` |
+| API de cenários em memória (Etapa 2: `setup_from_scenario`, `validate_scenario`) | **Testada** (18 testes novos; falham sem a validação). **Aguarda revisão; não commitada** |
+| Integração campanha↔batalha (iniciar a batalha a partir de um encontro, aplicar baixas) | **Plano aprovado (decisões D1–D8, abaixo); Etapas 1 e 2 feitas; Etapas 3 a 6 NÃO implementadas.** Conquista/retirada do perdedor: fora de escopo |
 | IA estratégica, diplomacia, guerra | Planejadas |
 | Conteúdo histórico, eventos, mais províncias | Planejados |
 | Salvar/carregar, polimento, áudio | Planejados |
@@ -54,9 +56,9 @@ Comando (saída capturada, código de saída verificado):
 "E:/Guerra Total - Brazil/Godot_v4.7.2-stable/Godot_v4.7.2-stable_win64_console.exe" --headless --path "E:/Guerra Total - Brazil" --script res://tests/run_tests.gd
 ```
 
-- **279 testes, 6394 asserções, 0 falhas**, código de saída 0, saída de erro vazia. Comparação com a linha de base anterior (265 testes, 6257 asserções, 0 falhas): os 265 testes anteriores continuam passando sem alteração de conteúdo; somam-se 14 testes e 137 asserções novos (`test_battle_retreat`).
-- Com o código ANTIGO de `battle_turns.gd` (antes da correção), a mesma suíte dá 6 falhas, todas nos testes novos da retirada: eles de fato detectam o defeito.
-- Testes da batalha em `tests/` (inclui `test_battle_retreat`, 14, da correção da retirada): `test_hex` (9), `test_battle_map` (dados, mapa, caminhos), `test_battle_turns` (movimento, seleção, turnos), `test_battle_combat` (ataques, terreno, tipos, moral), `test_battle_victory` (retirada, vitória, reinício), `test_battle_ai` (IA, controlador), `test_battle_ui` (interface e integração com a campanha). Base compartilhada: `tests/battle_case.gd` (não começa com `test_`, então o executor não a roda como teste).
+- **297 testes, 6634 asserções, 0 falhas**, código de saída 0, saída de erro vazia. Comparação com o estado commitado anterior (279 testes, 6394 asserções, 0 falhas): os 279 continuam passando sem alteração de conteúdo; somam-se 18 testes e 240 asserções novos (`test_battle_scenario`). (Histórico: 265/6257 antes da correção da retirada; +14 testes dela.)
+- Mutação: com a validação desligada em `setup_from_scenario`, 9 funções de teste falham; restaurada, 0 falhas. Com o código antigo da retirada (Etapa 1) a suíte dava 6 falhas nos testes dela.
+- Testes da batalha em `tests/` (inclui `test_battle_retreat`, 14, da retirada, e `test_battle_scenario`, 18, da API de cenários em memória): `test_hex` (9), `test_battle_map` (dados, mapa, caminhos), `test_battle_turns` (movimento, seleção, turnos), `test_battle_combat` (ataques, terreno, tipos, moral), `test_battle_victory` (retirada, vitória, reinício), `test_battle_ai` (IA, controlador), `test_battle_ui` (interface e integração com a campanha). Base compartilhada: `tests/battle_case.gd` (não começa com `test_`, então o executor não a roda como teste).
 - A cena principal e a cena da batalha executam sem erros em modo headless (`--quit-after`, sem stderr).
 - Foi feita "mutação" manual (quebrar regras de propósito: terreno ignorado, hexágono ocupado aceito, retirada podendo atacar, ações não restauradas, moral inerte): os testes falharam (10 falhas) e voltaram a 0 ao restaurar.
 - Simulações IA contra IA (8 sementes): todas terminam em 9–10 turnos; o lado que joga primeiro (jogador) venceu todas — equilíbrio do cenário de teste não foi ajustado.
@@ -93,9 +95,8 @@ Comando (saída capturada, código de saída verificado):
 
 ## Próximos passos sugeridos (a decidir pelo usuário)
 
-1. O usuário validar manualmente a correção da retirada (roteiro abaixo) e os exércitos da campanha.
-2. Autorizar o commit da Etapa 1 e resolver a autenticação do push.
-3. Só então a **Etapa 2** da integração (plano aprovado, com as decisões D1–D8 abaixo): cenário a partir de dados (`setup_from_scenario`, `source_id`); Etapa 3 camada `src/integration/` (`battle_request`, `battle_scenario_builder`, `data/battle/campaign_mapping.json`); Etapa 4 registro `GameState.battles` + aplicação transacional e idempotente do resultado; Etapa 5 botão "Iniciar batalha" e fluxo de interface; Etapa 6 testes e docs. Resumo do objetivo:
+1. O usuário revisar a Etapa 2 (API de cenários em memória) e autorizar o commit; resolver a autenticação do push.
+2. Só então a **Etapa 3** da integração (plano aprovado, com as decisões D1–D8 abaixo; a Etapa 2, `setup_from_scenario` e `source_id`, já existe): camada `src/integration/` (`battle_request`, `battle_scenario_builder`, `data/battle/campaign_mapping.json`); Etapa 4 registro `GameState.battles` + aplicação transacional e idempotente do resultado; Etapa 5 botão "Iniciar batalha" e fluxo de interface; Etapa 6 testes e docs. Resumo do objetivo:
    **integração campanha↔batalha** (Fase 3 do `GAME_DESIGN.md`): a partir de um encontro, montar o cenário (terreno da província, exércitos), jogar a batalha (ou resolver automaticamente) e aplicar o `BattleResult` na campanha (baixas por `source_id`, destruição, controle da província). Antes de implementar, apresentar plano e critérios, como nas etapas anteriores.
 
 ### Decisões aprovadas para a integração (D1–D8)
@@ -126,11 +127,11 @@ Na batalha de teste, deixar uma unidade ficar em retirada (atacá-la repetidamen
 
 ```
 cd "E:/Guerra Total - Brazil"
-git status                      # alterações da Etapa 1 (retirada) podem estar não commitadas
-git log --oneline               # topo: 1a5e409
+git status                      # alterações da Etapa 2 (API de cenários) podem estar não commitadas
+git log --oneline               # topo: ff38999
 ```
 
-Rodar os testes: comando acima (esperado: 279 testes, 0 falhas, stderr vazio).
+Rodar os testes: comando acima (esperado: 297 testes, 0 falhas, stderr vazio).
 
 - Abrir no editor: `"E:/Guerra Total - Brazil/Godot_v4.7.2-stable/Godot_v4.7.2-stable_win64.exe" --path "E:/Guerra Total - Brazil" --editor`
 - Jogar a campanha: o mesmo executável com `--path "E:/Guerra Total - Brazil"` (sem `--editor`).

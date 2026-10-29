@@ -136,8 +136,26 @@ func _validate_rules(r: Variant) -> void:
 		errors.append("regras: max_loss_fraction deve estar em (0, 1]")
 
 
+## Valida um cenário fornecido em memória (mesmo formato dos arquivos de scenarios/) contra os terrenos,
+## tipos e regras JÁ carregados neste registro. Não cadastra o cenário e não altera `errors`.
+## Devolve a lista de problemas; vazia = válido.
+func validate_scenario(scenario: Variant) -> PackedStringArray:
+	var saved := errors
+	errors = PackedStringArray()
+	if typeof(scenario) != TYPE_DICTIONARY:
+		errors.append("cenário deve ser um dicionário")
+	elif terrains.is_empty() or unit_types.is_empty() or rules.is_empty():
+		errors.append("registro de batalha não carregado (terrenos, tipos de unidade ou regras ausentes)")
+	else:
+		_validate_scenario(scenario)
+	var found := errors
+	errors = saved
+	return found
+
+
 func _validate_scenario(s: Dictionary) -> void:
-	var ctx := "cenário %s" % s["id"]
+	var ctx := "cenário %s" % str(s.get("id", "(sem id)"))
+	_string(s, "id", ctx)
 	_string(s, "name", ctx)
 	_number(s, "seed", ctx, 0.0)
 	_number(s, "max_turns", ctx, 1.0)
@@ -170,7 +188,7 @@ func _validate_scenario(s: Dictionary) -> void:
 		_string(info, "name", "%s/%s" % [ctx, side])
 		if typeof(info.get("color")) != TYPE_STRING or not Color.html_is_valid(info["color"]):
 			errors.append("%s/%s: cor inválida" % [ctx, side])
-		if not (info.get("home_edge") in EDGES):
+		if not _is_one_of(info.get("home_edge"), EDGES):
 			errors.append("%s/%s: home_edge inválida" % [ctx, side])
 		edges.append(info.get("home_edge"))
 	if edges.size() == 2 and edges[0] == edges[1]:
@@ -190,17 +208,22 @@ func _validate_scenario_units(s: Dictionary, ctx: String, rows: Array, legend: D
 			continue
 		var label := "%s/%s" % [ctx, str(u.get("name"))]
 		_string(u, "name", ctx)
-		if not (u.get("side") in SIDES):
+		if not _is_one_of(u.get("side"), SIDES):
 			errors.append("%s: lado inválido" % label)
 			continue
 		per_side[u["side"]] += 1
 		if not unit_types.has(u.get("type")):
 			errors.append("%s: tipo desconhecido (%s)" % [label, str(u.get("type"))])
+		if u.has("source_id") and (not _is_number(u["source_id"]) or u["source_id"] < 0 or u["source_id"] != floorf(u["source_id"])):
+			errors.append("%s: source_id deve ser um inteiro >= 0" % label)
 		var at: Variant = u.get("at")
 		if typeof(at) != TYPE_ARRAY or (at as Array).size() != 2 \
 				or not _is_number(at[0]) or not _is_number(at[1]) \
 				or at[0] < 0 or at[0] >= width or at[1] < 0 or at[1] >= rows.size():
 			errors.append("%s: posição 'at' inválida ou fora do mapa" % label)
+			continue
+		if at[0] != floorf(at[0]) or at[1] != floorf(at[1]):
+			errors.append("%s: posição 'at' deve ter coordenadas inteiras" % label)
 			continue
 		var terrain_id: String = legend[str(rows[int(at[1])])[int(at[0])]]
 		if not terrains[terrain_id]["passable"]:
@@ -216,6 +239,11 @@ func _validate_scenario_units(s: Dictionary, ctx: String, rows: Array, legend: D
 	for side in SIDES:
 		if per_side[side] == 0:
 			errors.append("%s: o lado '%s' não tem unidades" % [ctx, side])
+
+
+## `value in lista` só para textos: valores de outro tipo (ou ausentes) não são buscados na lista tipada.
+func _is_one_of(value: Variant, options: Array[String]) -> bool:
+	return typeof(value) == TYPE_STRING and value in options
 
 
 func _is_number(value: Variant) -> bool:

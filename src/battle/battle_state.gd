@@ -31,12 +31,28 @@ var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var log: Array[String] = []
 
 
-## Monta a batalha a partir de um cenário do BattleRegistry. Retorna false se o cenário não existir.
+## Motivos da última recusa de setup()/setup_from_scenario() (vazio se a última chamada deu certo).
+var setup_errors: PackedStringArray = PackedStringArray()
+
+
+## Monta a batalha a partir de um cenário CADASTRADO no BattleRegistry. Retorna false se o cenário não existir.
 ## Chamar de novo restaura tudo (é assim que a batalha é reiniciada).
 func setup(registry: RefCounted, p_scenario_id: String) -> bool:
 	if not registry.scenarios.has(p_scenario_id):
+		setup_errors = PackedStringArray(["Cenário não cadastrado: %s" % p_scenario_id])
 		return false
-	var scenario: Dictionary = registry.scenarios[p_scenario_id]
+	return setup_from_scenario(registry, registry.scenarios[p_scenario_id])
+
+
+## Monta a batalha a partir de um cenário fornecido como dicionário (mesmo formato de data/battle/scenarios/),
+## sem precisar cadastrá-lo. O cenário é VALIDADO antes de qualquer alteração: se for inválido, devolve false,
+## preenche `setup_errors` e este estado permanece exatamente como estava (nunca fica parcialmente montado).
+func setup_from_scenario(registry: RefCounted, scenario: Dictionary) -> bool:
+	setup_errors = registry.validate_scenario(scenario)
+	if not setup_errors.is_empty():
+		return false
+	var p_scenario_id: String = scenario["id"]
+	scenario = scenario.duplicate(true)  # não compartilha dicionários com o chamador
 	scenario_id = p_scenario_id
 	scenario_name = scenario["name"]
 	seed_value = int(scenario["seed"])
@@ -58,7 +74,7 @@ func setup(registry: RefCounted, p_scenario_id: String) -> bool:
 	for entry in scenario["units"]:
 		var pos := Hex.offset_to_axial(int(entry["at"][0]), int(entry["at"][1]))
 		var overrides := {}
-		for field in ["strength", "morale"]:
+		for field in ["strength", "morale", "source_id"]:
 			if entry.has(field):
 				overrides[field] = int(entry[field])
 		add_unit(entry["type"], entry["name"], entry["side"], pos, overrides)

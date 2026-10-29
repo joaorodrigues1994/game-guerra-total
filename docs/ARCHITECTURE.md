@@ -149,6 +149,24 @@ A batalha é um módulo **separado**: não lê nem altera o `GameState`, o `Regi
 
 Os dados de teste ficam em `data/battle/`, separados dos dados permanentes da campanha (`data/*.json`).
 
+### API de cenários em memória (Etapa 2 da integração)
+
+Uma batalha pode ser iniciada a partir de um cenário **fornecido como dicionário**, sem cadastrá-lo em `data/battle/scenarios/`. O formato é exatamente o dos arquivos de cenário (`id`, `name`, `seed`, `max_turns`, `map.rows`, `sides`, `units`); a única adição é o campo **opcional** `source_id` por unidade (inteiro >= 0, referência à unidade de origem; vai para `unit["source_id"]` e volta no `result_summary()`).
+
+```gdscript
+var registry := BattleRegistry.new(); registry.load_from_dir()          # terrenos, tipos e regras
+var problems := registry.validate_scenario(scenario)                      # PackedStringArray; vazio = válido (não altera o registro)
+var state := BattleState.new()
+if not state.setup_from_scenario(registry, scenario):                     # valida ANTES de alterar o estado
+    print(state.setup_errors)                                             # motivos legíveis, todos de uma vez
+```
+
+- `BattleState.setup_from_scenario(registry, scenario: Dictionary) -> bool`: valida, e só então monta o estado. Se o cenário for inválido devolve `false`, preenche `setup_errors` e **o estado permanece exatamente como estava** (um estado novo continua vazio; uma batalha em andamento não é afetada). O estado copia o cenário (`duplicate(true)`): alterar o dicionário depois não muda a batalha.
+- `BattleState.setup(registry, id)` continua igual para quem o usa: busca o cenário **cadastrado** e delega a `setup_from_scenario`; id desconhecido devolve `false` com `setup_errors = ["Cenário não cadastrado: ..."]`. Os dois caminhos usam a mesma lógica (nada duplicado) e produzem estados idênticos.
+- `BattleRegistry.validate_scenario(scenario: Variant) -> PackedStringArray` é a mesma validação aplicada aos arquivos ao carregar o registro. Rejeita: valor que não é dicionário; registro sem terrenos/tipos/regras carregados; `id`/`name`/`seed`/`max_turns` ausentes ou com tipo/valor inválido; `map.rows` ausente, vazio, com linha que não é texto ou de largura diferente, ou com caractere de terreno desconhecido; `sides` sem `player`/`enemy`, com nome vazio, cor ou `home_edge` inválidos, ou com a mesma borda para os dois lados; `units` que não é lista; unidade que não é objeto, sem nome, com lado inválido, tipo desconhecido, `at` ausente/mal formado/fracionário/fora do mapa/em terreno intransponível/repetido, `strength`/`morale` fora de [1, máximo do tipo], `source_id` inválido; lado sem unidades.
+- Diferença em relação à interface sugerida (`setup_from_scenario(registry, scenario)`): o formato é o mesmo; apenas o retorno é `bool` (padrão do projeto) e os motivos ficam em `setup_errors`.
+- Fora de escopo desta etapa (Etapas 3 a 6): gerar o cenário a partir de exércitos/províncias, converter tipos/efetivo/moral da campanha, aplicar o resultado na campanha, bloquear o turno da campanha.
+
 ### Geometria (`Hex`, único lugar com contas de hexágono)
 
 Coordenadas **axiais** (q, r) em `Vector2i`, hexágonos **pointy-top**. Vizinhos: (+1,0) (+1,-1) (0,-1) (-1,0) (-1,+1) (0,+1). Distância = (|dq| + |dq+dr| + |dr|)/2. Pixels: `x = s·(√3·q + √3/2·r)`, `y = s·3/2·r`; o inverso usa arredondamento cúbico (`axial_round`). Os cenários usam **offset odd-r** (coluna, linha), convertido por `offset_to_axial`/`axial_to_offset`. A escolha axial mantém vizinhança e distância sem tabelas por paridade; offset só existe nas bordas (dados e exibição de "coluna, linha").
