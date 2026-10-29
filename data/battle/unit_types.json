@@ -1,0 +1,32 @@
+[
+  {
+    "id": "infantry",
+    "name": "Infantaria",
+    "campaign_category": "infantry",
+    "attack": 6, "defense": 6,
+    "move_range": 3, "attack_range": 1, "min_range": 1,
+    "melee": true, "can_retaliate": true, "can_attack_after_move": true,
+    "charge_bonus": 0.0,
+    "max_strength": 500, "max_morale": 100
+  },
+  {
+    "id": "cavalry",
+    "name": "Cavalaria",
+    "campaign_category": "cavalry",
+    "attack": 8, "defense": 4,
+    "move_range": 5, "attack_range": 1, "min_range": 1,
+    "melee": true, "can_retaliate": true, "can_attack_after_move": true,
+    "charge_bonus": 0.35,
+    "max_strength": 200, "max_morale": 100
+  },
+  {
+    "id": "artillery",
+    "name": "Artilharia",
+    "campaign_category": "artillery",
+    "attack": 9, "defense": 3,
+    "move_range": 2, "attack_range": 3, "min_range": 2,
+    "melee": false, "can_retaliate": false, "can_attack_after_move": false,
+    "charge_bonus": 0.0,
+    "max_strength": 80, "max_morale": 100
+  }
+]

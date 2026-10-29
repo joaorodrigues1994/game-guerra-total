@@ -8,6 +8,9 @@ const ProvincePanel := preload("res://src/ui/province_panel.gd")
 const StatusBar := preload("res://src/ui/status_bar.gd")
 const TopBar := preload("res://src/ui/top_bar.gd")
 
+## Repassa o pedido do botão "Batalha de teste" da barra superior.
+signal battle_requested
+
 var controller: CampaignController
 var top_bar: PanelContainer
 var map_view: Control
@@ -28,6 +31,7 @@ func setup(p_controller: CampaignController) -> void:
 	top_bar = TopBar.new()
 	top_bar.bind(controller)
 	top_bar.end_turn_requested.connect(controller.end_turn)
+	top_bar.battle_requested.connect(func() -> void: battle_requested.emit())
 	root.add_child(top_bar)
 
 	var body := HBoxContainer.new()

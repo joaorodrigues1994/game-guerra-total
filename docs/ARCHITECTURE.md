@@ -20,8 +20,8 @@ Documento vivo. Estado atual: **Fase 0 (Fundação)**.
 | `economy/` | `EconomyCalculator` (receitas, manutenção, bônus; só leitura) | campanha |
 | `units/` | `ArmyActions` (exércitos, generais, movimentação, encontros) | exércitos |
 | `provinces/` | `MapGeometry` (geometria pura), `ProvinceMap` (polígonos, teste de clique, fronteiras) | Fase 1 |
-| `battle/` | grade hexagonal, resolução de combate | vazio (Fase 2) |
-| `ui/` | `MapView` (mapa e marcadores), `ProvincePanel`, `ArmyPanel`, `TopBar`, `StatusBar`, `CampaignScreen` (leem o estado e chamam o controlador) | Fase 1/campanha/exércitos |
+| `battle/` | batalha tática independente: `Hex`, `BattleRegistry`, `BattleMap`, `BattleState`, `BattlePathfinding`, `BattleMovement`, `BattleCombat`, `BattleMorale`, `BattleTurns`, `BattleAI`, `BattleController` | batalha tática |
+| `ui/` | `MapView` (mapa e marcadores), `ProvincePanel`, `ArmyPanel`, `TopBar`, `StatusBar`, `CampaignScreen` (leem o estado e chamam o controlador); `ui/battle/`: `BattleScreen`, `BattleView`, `BattlePanel`, `BattleLogPanel`, `BattleResultPanel` | Fase 1/campanha/exércitos/batalha |
 
 ## Dados (`data/`)
 
@@ -134,16 +134,72 @@ Eventos: `EventBus.turn_phase_processed(fase)` a cada etapa e `turn_ended`; o `C
 - Barra de mensagens: resultado das ações, motivos de rejeição e o resumo do turno.
 - Os botões chamam `CampaignController.build/recruit/end_turn`; a interface não replica regras nem guarda estado.
 
-## Integração campanha ↔ batalha (planejada)
+## Batalha tática (implementada; independente da campanha)
 
-- `BattleRequest`: exércitos participantes (unidades e efetivos), generais, terreno da província, clima, seed.
-- `BattleResult`: vencedor, baixas por unidade, moral final, unidades em retirada, generais mortos/feridos.
-- A campanha aplica o resultado **depois** da batalha; a batalha nunca altera o `GameState` diretamente.
-- Uma resolução automática usará as mesmas estatísticas, para batalhas entre IAs.
+A batalha é um módulo **separado**: não lê nem altera o `GameState`, o `Registry` ou a campanha. Tem seus próprios dados (`data/battle/`), estado (`BattleState`) e controlador (`BattleController`). Roda sozinha (`scenes/battle.tscn`) ou como camada sobre a campanha (botão **Batalha de teste** na barra superior; a campanha continua viva por baixo e "Voltar à campanha" a mostra de novo, intacta).
+
+### Dados (`data/battle/`, validados por `BattleRegistry`)
+
+| Arquivo | Conteúdo |
+|---|---|
+| `terrain.json` | `plains` (custo 1, +0%), `forest` (custo 2, +30% defesa), `hills` (custo 2, +20%), `water` (intransponível); cor e caractere de legenda |
+| `unit_types.json` | `infantry`, `cavalry`, `artillery`: ataque, defesa, `move_range`, `attack_range`, `min_range`, `melee`, `can_retaliate`, `can_attack_after_move`, `charge_bonus`, `max_strength`, `max_morale`, `campaign_category` (ponte para os tipos da campanha) |
+| `battle_rules.json` | taxas de dano, variação, limites de moral, recuperação, raio de queda de aliado etc. |
+| `scenarios/test_battle.json` | mapa 12×9 em texto (`.` planície, `f` floresta, `h` colina, `~` água), semente, limite de turnos, lados e as 10 unidades (5 por lado) |
+
+Os dados de teste ficam em `data/battle/`, separados dos dados permanentes da campanha (`data/*.json`).
+
+### Geometria (`Hex`, único lugar com contas de hexágono)
+
+Coordenadas **axiais** (q, r) em `Vector2i`, hexágonos **pointy-top**. Vizinhos: (+1,0) (+1,-1) (0,-1) (-1,0) (-1,+1) (0,+1). Distância = (|dq| + |dq+dr| + |dr|)/2. Pixels: `x = s·(√3·q + √3/2·r)`, `y = s·3/2·r`; o inverso usa arredondamento cúbico (`axial_round`). Os cenários usam **offset odd-r** (coluna, linha), convertido por `offset_to_axial`/`axial_to_offset`. A escolha axial mantém vizinhança e distância sem tabelas por paridade; offset só existe nas bordas (dados e exibição de "coluna, linha").
+
+### Unidade tática (`BattleState.units`)
+
+Dicionário por instância: `id` (inteiro), `name`, `type`, `side` (`player`/`enemy`), `pos`, `strength`/`max_strength`, `attack`, `defense`, `move_range`, `attack_range`, `min_range`, `melee`, `morale`/`max_morale`, `moved`, `attacked`, `moved_steps`, `routing`, `fled`, `destroyed`, `source_id`. Os atributos são **copiados do tipo na criação** (a campanha poderá injetar modificadores, por exemplo de general). `status_of`: `firm` (moral > 50), `shaken` (<= 50), `routing`, `fled`, `destroyed`.
+
+### Turnos e movimento
+
+- Rodada: jogador, depois inimigo; o número do turno sobe quando o inimigo termina. No **início do turno de um lado**: ações restauradas; moral recuperada (só sem inimigo adjacente) e reagrupamento; retirada forçada das unidades ainda em fuga; verificação de vitória.
+- Movimento (`BattleMovement`/`BattlePathfinding`): Dijkstra pelo custo do terreno **entrado**; orçamento = `move_range`; água e hexágonos ocupados (por qualquer unidade) não podem ser atravessados nem ocupados; 1 movimento por unidade por turno; só unidades do lado ativo e fora de retirada. Toda recusa devolve o motivo e não altera o estado.
+- Inimigo (`BattleAI`, determinística): ataca se alcança alguém (alvo de menor efetivo); senão move para um hexágono de onde possa atacar (maior bônus de terreno, menor custo); senão se aproxima (mapa de distância por terreno, contorna a água; artilharia para a distância do alcance). Usa as mesmas funções validadas do jogador. Ao fim do turno do jogador o `BattleController` roda o turno inimigo inteiro e devolve o controle.
+
+### Combate (`BattleCombat`) — fórmula e valores
+
+```
+poder     = ataque × (efetivo / efetivo_máx) × mult_moral_atacante × (1 + carga)
+defesa_ef = defesa_alvo × (1 + bônus_terreno_do_alvo) × mult_moral_alvo
+fração    = clamp(taxa × (poder / defesa_ef) × fator × variação, 0, 0,6)
+baixas    = clamp(ceil(efetivo_alvo × fração), 1, efetivo_alvo)     # dano mínimo 1
+taxa      = 0,22 (corpo a corpo) ou 0,14 (à distância); fator = 1 (ataque) ou 0,5 (retaliação)
+variação  = 1 ± 10% com RNG de semente configurável (o cenário define a semente; 0 = sem sorteio)
+```
+
+- **Infantaria**: ataque 6, defesa 6, move 3, alcance 1, 500 homens. **Cavalaria**: ataque 8, defesa 4, move 5, alcance 1, 200 homens; **carga** (+35% de poder) se andou >= 2 hexágonos no turno e ataca corpo a corpo. **Artilharia**: ataque 9, defesa 3, move 2, alcance 2–3 (não ataca adjacente), 80 homens; só à distância, **não atira no turno em que se moveu** e não retalia.
+- Corpo a corpo gera **retaliação** (uma vez, fator 0,5) se o alvo sobrevive, não está em retirada e pode retaliar. Tiro à distância não gera retaliação. Aliados não podem ser atacados; uma ação de ataque por unidade por turno.
+- Alvo destruído: marcado `destroyed`, efetivo 0, hexágono liberado.
+
+### Moral (`BattleMorale`)
+
+Moral em [0, máx=100]. Ao receber um ataque: `queda = ceil(baixas/efetivo_máx × 100) + 3` (+2 em corpo a corpo). Destruição de uma unidade tira 10 de moral dos aliados a até 2 hexágonos. Limites: **abalada** <= 50 (ataque ×0,8, defesa ×0,9); **em retirada** <= 25 (não ataca, não retalia, defesa ×0,5, não recebe ordens); reagrupa ao chegar a >= 40 (só longe de inimigos). Recuperação no início do turno do lado: +5 (+8 em retirada), nunca adjacente a inimigo. **Retirada**: no início do turno do lado a unidade recua sozinha pelo caminho de menor custo até a borda de origem (oeste para o jogador, leste para o inimigo), até seu `move_range`; ao chegar à borda **abandona o campo** (`fled`); sem caminho, **fica parada** (sem teletransporte). Cada turno é um passo monotônico até a borda ou uma espera, e o limite de turnos impede qualquer ciclo infinito.
+
+### Vitória (`BattleTurns.evaluate_victory`, após cada ataque e no início de cada turno)
+
+Um lado está **quebrado** quando não tem unidade **efetiva** (em campo e fora de retirada). Ter gasto as ações não conta. Só um lado quebrado: o outro vence, por `elimination` (o derrotado não tem mais ninguém em campo: destruídos ou fugidos) ou `rout` (restam unidades dele, todas em retirada). Os dois quebrados: empate (`mutual_break`). Ao terminar o turno `max_turns` (40) do inimigo: vence quem tem mais efetivo efetivo (`turn_limit`; igual = empate). Depois do fim, toda ação é recusada com "A batalha terminou."
+
+### Interface e reinício
+
+`BattleScreen`: barra superior (turno, lado ativo, **Encerrar turno**, **Reiniciar batalha**, **Voltar à campanha** quando aberta pela campanha), mapa (`BattleView`: terreno com marcas, hexágonos alcançáveis em azul, alvos válidos em vermelho, unidade/hexágono selecionados, formas por tipo, barras de efetivo e moral, marcas de ação gasta), painel da unidade e do hexágono, registro de combate e painel de resultado (vencedor, motivo, sobreviventes por lado, **Jogar novamente**). Cliques: unidade própria seleciona; hexágono azul move; inimigo vermelho ataca; clique em inimigo sem unidade própria selecionada só consulta; botão direito/Esc limpa. `BattleController.restart()` recria o `BattleState` do cenário (mesma semente) e mantém as mesmas conexões de sinal: nada é duplicado.
+
+## Integração campanha ↔ batalha (contrato pronto, integração NÃO implementada)
+
+O que existe: `BattleState.setup(registry, scenario)` monta tudo a partir de **dados**; `BattleState.add_unit(type, nome, lado, pos, {strength, morale, source_id})` aceita efetivo, moral e o id da unidade de campanha de origem; `BattleState.result_summary()` devolve o `BattleResult`: `{scenario_id, winner, reason, text, turns, units: {lado: [{unit_id, source_id, name, type, strength, max_strength, morale, status}]}}`. O contrato de encontro da campanha (`GameState.encounters`: província, exércitos e países) é o gatilho natural.
+
+O que falta (próxima etapa): (1) montar um cenário a partir de um encontro: mapa a partir do terreno da província (`terrains` da campanha -> terrenos táticos), unidades de cada exército (`campaign_category` liga o tipo da campanha ao tipo tático; efetivo/moral/experiência das instâncias; `source_id` = id da instância); general como modificador; (2) aplicar o `BattleResult` à campanha **depois** da batalha (baixas por `source_id`, destruídas, fugidas, controle da província); a batalha nunca altera o `GameState` diretamente; (3) resolução automática para IA contra IA reutilizando as mesmas regras (`BattleAI` já joga os dois lados em testes).
 
 ## Decisões em aberto
 
-- Grade hexagonal na batalha: confirmar com protótipo na Fase 2.
+- Grade hexagonal na batalha: **decidido** (axial, pointy-top); ver a seção da batalha tática.
+- Equilíbrio da batalha de teste: nas simulações IA contra IA o lado que joga primeiro venceu sempre; ajustar quando houver conteúdo real.
 - Formato de salvamento: Fase 6 (o `GameState` já expõe `to_dict()`).
 
 ## Testes

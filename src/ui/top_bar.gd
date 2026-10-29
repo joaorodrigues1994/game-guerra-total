@@ -7,6 +7,8 @@ const ProvincePanel := preload("res://src/ui/province_panel.gd")
 const UiStyle := preload("res://src/ui/ui_style.gd")
 
 signal end_turn_requested
+## Abre a batalha tática de teste (independente da campanha).
+signal battle_requested
 
 var controller: CampaignController
 
@@ -16,6 +18,7 @@ var date_label: Label
 var resources_label: Label
 var flows_label: Label
 var end_turn_button: Button
+var battle_button: Button
 
 var _swatch: ColorRect
 
@@ -46,6 +49,11 @@ func _init() -> void:
 
 	date_label = UiStyle.make_label(15)
 	row.add_child(date_label)
+
+	battle_button = Button.new()
+	battle_button.text = "Batalha de teste"
+	battle_button.pressed.connect(func() -> void: battle_requested.emit())
+	row.add_child(battle_button)
 
 	end_turn_button = Button.new()
 	end_turn_button.text = "Encerrar turno"

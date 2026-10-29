@@ -27,5 +27,6 @@ Abrir no editor: `Godot_v4.7.2-stable_win64.exe --path "E:/Guerra Total - Brazil
 - Dados em `data/*.json`, carregados e validados pelo `Registry`. Estado mutável **só** no `GameState` (única fonte da verdade). Regras em módulos sem nós; a interface lê o estado via `CampaignController` e envia ações — não guarda estado nem regras.
 - Toda ação valida antes de alterar o estado e devolve `{ok, message}`; rejeição deixa o estado intacto.
 - IDs estáveis em texto (países/províncias/definições) e inteiros para instâncias (unidades, exércitos). Sem `class_name`: use `const X := preload("res://...")`.
+- A batalha tática (`src/battle/`, `src/ui/battle/`, `data/battle/`) é um módulo independente da campanha: não acessa `GameState`/`Registry`; a integração futura usa `BattleState.add_unit` (entrada) e `result_summary()` (saída).
 - A ordem das etapas do turno é fixa, documentada e testada (`tests/test_turn_order.gd`); mudá-la exige atualizar o doc e o teste.
 - Novos testes: `tests/test_*.gd` estendendo `tests/test_case.gd` (métodos `test_*`; helpers `new_game()` e `units_of()`).

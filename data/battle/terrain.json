@@ -1,0 +1,6 @@
+[
+  { "id": "plains", "name": "Planície", "legend": ".", "passable": true, "move_cost": 1, "defense_bonus": 0.0, "color": "#a9c46c" },
+  { "id": "forest", "name": "Floresta", "legend": "f", "passable": true, "move_cost": 2, "defense_bonus": 0.3, "color": "#3f6b3a" },
+  { "id": "hills", "name": "Colina", "legend": "h", "passable": true, "move_cost": 2, "defense_bonus": 0.2, "color": "#b79b62" },
+  { "id": "water", "name": "Água", "legend": "~", "passable": false, "move_cost": 0, "defense_bonus": 0.0, "color": "#3d78a8" }
+]

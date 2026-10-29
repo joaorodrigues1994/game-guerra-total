@@ -1,0 +1,22 @@
+{
+  "default_max_turns": 40,
+  "variation": 0.1,
+  "melee_rate": 0.22,
+  "ranged_rate": 0.14,
+  "retaliation_factor": 0.5,
+  "max_loss_fraction": 0.6,
+  "charge_min_steps": 2,
+  "morale_loss_per_casualty_percent": 1.0,
+  "morale_hit_penalty": 3,
+  "morale_melee_extra_penalty": 2,
+  "ally_death_radius": 2,
+  "ally_death_morale_penalty": 10,
+  "morale_recovery": 5,
+  "morale_recovery_routing": 8,
+  "shaken_threshold": 50,
+  "rally_threshold": 40,
+  "rout_threshold": 25,
+  "shaken_attack_multiplier": 0.8,
+  "shaken_defense_multiplier": 0.9,
+  "routing_defense_multiplier": 0.5
+}

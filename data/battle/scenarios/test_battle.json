@@ -1,0 +1,35 @@
+{
+  "id": "test_battle",
+  "name": "Batalha de teste",
+  "seed": 1805,
+  "max_turns": 40,
+  "map": {
+    "rows": [
+      "ff....~...hh",
+      "f.....~...h.",
+      "......~~....",
+      "............",
+      ".hh...~..hh.",
+      ".h....~...ff",
+      "............",
+      "f.....~~....",
+      "ff....~....."
+    ]
+  },
+  "sides": {
+    "player": { "name": "Jogador (França)", "color": "#2f55c4", "home_edge": "west" },
+    "enemy": { "name": "Inimigo (Áustria)", "color": "#b8433a", "home_edge": "east" }
+  },
+  "units": [
+    { "side": "player", "type": "infantry", "name": "1º Batalhão de Linha", "at": [3, 3] },
+    { "side": "player", "type": "infantry", "name": "2º Batalhão de Linha", "at": [3, 5] },
+    { "side": "player", "type": "infantry", "name": "3º Batalhão de Linha", "at": [2, 4] },
+    { "side": "player", "type": "cavalry", "name": "Dragões", "at": [2, 2] },
+    { "side": "player", "type": "artillery", "name": "Bateria de Campanha", "at": [1, 4] },
+    { "side": "enemy", "type": "infantry", "name": "1º Regimento Austríaco", "at": [8, 3] },
+    { "side": "enemy", "type": "infantry", "name": "2º Regimento Austríaco", "at": [8, 5] },
+    { "side": "enemy", "type": "infantry", "name": "3º Regimento Austríaco", "at": [9, 4] },
+    { "side": "enemy", "type": "cavalry", "name": "Hussardos", "at": [9, 2] },
+    { "side": "enemy", "type": "artillery", "name": "Bateria Austríaca", "at": [10, 4] }
+  ]
+}
