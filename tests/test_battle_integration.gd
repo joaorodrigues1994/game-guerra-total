@@ -165,7 +165,7 @@ func test_strength_and_morale_are_taken_from_the_campaign_units() -> void:
 	assert_eq(tactical[enemy_unit]["morale"], 70, "moral inicial da infantaria (70)")
 	for info in result["conversion"]:
 		if info["source_id"] == wounded:
-			assert_true(not info["strength_clamped"] and not info["morale_clamped"], "sem limitação")
+			assert_eq([info["strength"], info["morale"]], [320, 55], "o resultado da conversão mostra os valores preservados")
 	var scenario_state := BattleState.new()
 	assert_true(scenario_state.setup_from_scenario(battle_registry(), result["scenario"]), "cenário jogável")
 	var tactical_unit: Dictionary = {}
@@ -178,21 +178,54 @@ func test_strength_and_morale_are_taken_from_the_campaign_units() -> void:
 	assert_eq(tactical_unit["attack"], 6.0, "ataque dos dados táticos")
 
 
-func test_values_above_the_tactical_maximum_are_clamped_and_reported() -> void:
+func test_values_above_the_tactical_maximum_are_rejected_never_reduced_silently() -> void:
+	for field in ["strength", "morale"]:
+		var game := new_game()
+		var state = game["state"]
+		var encounter_id := _encounter(game)
+		var unit_id: int = state.armies[state.armies_in(PROVINCE, "fra")[0]]["units"][0]
+		state.unit_by_id(unit_id)[field] = 900 if field == "strength" else 150
+		var result := _build(game, encounter_id)
+		_assert_fails(result, "acima do máximo do tipo tático", "%s acima do máximo" % field)
+		assert_has_error(result["errors"], "Unidade %d" % unit_id, "o erro identifica a unidade")
+		assert_has_error(result["errors"], "em silêncio", "e diz que nada é reduzido em silêncio")
+		assert_eq(state.unit_by_id(unit_id)[field], 900 if field == "strength" else 150, "a campanha não foi alterada")
+
+
+func test_incompatible_tactical_maximum_is_a_clear_error_and_wounded_units_still_fit() -> void:
 	var game := new_game()
 	var state = game["state"]
 	var encounter_id := _encounter(game)
-	var unit_id: int = state.armies[state.armies_in(PROVINCE, "fra")[0]]["units"][0]
-	state.unit_by_id(unit_id)["strength"] = 900
-	state.unit_by_id(unit_id)["morale"] = 150
-	var result := _build(game, encounter_id)
-	assert_true(result["ok"], result["message"])
-	for info in result["conversion"]:
-		if info["source_id"] == unit_id:
-			assert_eq(info["strength"], 500, "efetivo limitado ao máximo do tipo")
-			assert_eq(info["morale"], 100, "moral limitada ao máximo do tipo")
-			assert_true(info["strength_clamped"] and info["morale_clamped"], "a limitação é informada")
-			assert_eq(info["strength_campaign"], 900, "o valor original fica registrado")
+	var br := battle_registry()
+	br.unit_types["infantry"]["max_strength"] = 400  # dados táticos incompatíveis com a definição de campanha (500)
+	var result := _build(game, encounter_id, {}, br)
+	_assert_fails(result, "efetivo 500 acima do máximo do tipo tático 'infantry' (400)", "máximo tático menor que o da campanha")
+	assert_eq(result["errors"].size(), 3, "um erro por batalhão de efetivo pleno (nada é descartado em silêncio)")
+	# Unidades feridas (<= 400) continuam cabendo e com o efetivo EXATO da campanha.
+	for army_id in state.encounters[0]["armies"]:
+		for unit_id in state.armies[army_id]["units"]:
+			if state.unit_by_id(unit_id)["type"] == "unit_line_inf":
+				state.unit_by_id(unit_id)["strength"] = 350
+	var fitted := _build(game, encounter_id, {}, br)
+	assert_true(fitted["ok"], fitted["message"])
+	for u in fitted["scenario"]["units"]:
+		if u["type"] == "infantry":
+			assert_eq(u["strength"], 350, "efetivo preservado exatamente")
+
+
+func test_strength_never_increases_so_battle_results_are_consistent_with_the_request() -> void:
+	var game := new_game()
+	var result := _build(game, _encounter(game))
+	for u in result["scenario"]["units"]:
+		var snapshot: Dictionary = result["request"]["units"][u["source_id"]]
+		assert_eq(u["strength"], snapshot["strength"], "o cenário começa exatamente com o efetivo do pedido (%d)" % u["source_id"])
+		assert_eq(u["morale"], snapshot["morale"], "e com a moral do pedido")
+	var state := BattleState.new()
+	assert_true(state.setup_from_scenario(battle_registry(), result["scenario"]), "jogável")
+	for id in state.units:
+		var unit: Dictionary = state.units[id]
+		assert_eq(unit["strength"], result["request"]["units"][unit["source_id"]]["strength"], "no estado tático também")
+		assert_true(unit["strength"] <= unit["max_strength"], "dentro do máximo tático")
 
 
 func test_invalid_strength_or_morale_is_rejected_instead_of_dropping_the_unit() -> void:
@@ -559,3 +592,58 @@ func test_failed_builds_do_not_modify_the_campaign_either() -> void:
 	var before: Dictionary = game["state"].to_dict()
 	assert_true(not _build(game, encounter_id)["ok"], "recusado")
 	assert_eq(game["state"].to_dict(), before, "estado intacto mesmo na recusa")
+
+
+# --- IDs: correspondência durante e depois da batalha ----------------------------------------------------------
+
+func test_result_summary_recovers_the_origin_army_by_source_id_not_by_position() -> void:
+	var game := new_game()
+	var state = game["state"]
+	var result := _build(game, _encounter(game))
+	var request: Dictionary = result["request"]
+	var battle := BattleState.new()
+	assert_true(battle.setup_from_scenario(battle_registry(), result["scenario"]), "jogável")
+	# Mexe na batalha: move, destrói e embaralha a ordem em que as unidades aparecem.
+	var victim_id := 0
+	var victim_source := 0
+	for id in battle.units:
+		if battle.units[id]["side"] == "enemy":
+			victim_id = id
+			victim_source = battle.units[id]["source_id"]
+	battle.units[victim_id]["destroyed"] = true
+	battle.units[victim_id]["strength"] = 0
+	var any_player: int = battle.live_units("player")[0]
+	battle.units[any_player]["pos"] = Hex.offset_to_axial(5, 0)
+	var summary := battle.result_summary()
+	var seen := {}
+	var entries: Array = summary["units"]["player"] + summary["units"]["enemy"]
+	entries.reverse()  # a ordem do array não importa
+	for entry in entries:
+		var source_id: int = entry["source_id"]
+		assert_true(source_id >= 1, "toda unidade convertida mantém o source_id")
+		assert_true(not seen.has(source_id), "nenhum source_id repetido no resultado")
+		seen[source_id] = true
+		assert_true(request["unit_army"].has(source_id), "o exército de origem é recuperável pelo pedido: %d" % source_id)
+		var campaign_unit: Dictionary = state.unit_by_id(source_id)
+		assert_eq(battle.units[entry["unit_id"]]["source_id"], source_id, "unit_id tático <-> source_id coerentes")
+		assert_eq(state.armies[request["unit_army"][source_id]]["owner"], campaign_unit["owner"], "o exército de origem é do mesmo dono")
+	assert_eq(seen.size(), 5, "todas as unidades participantes aparecem no resultado")
+	for entry in summary["units"]["enemy"]:
+		if entry["source_id"] == victim_source:
+			assert_eq(entry["status"], "destroyed", "a unidade destruída continua identificada pelo source_id")
+			assert_eq(entry["strength"], 0, "com o efetivo final")
+
+
+func test_unit_ids_are_never_reused_in_campaign_or_battle() -> void:
+	var game := new_game()
+	var state = game["state"]
+	var first: int = state.add_unit(game["registry"], "unit_line_inf", "fra", "prov_paris")
+	state.units.erase(state.unit_by_id(first))  # a unidade deixa de existir (como será com as destruídas)
+	var second: int = state.add_unit(game["registry"], "unit_line_inf", "fra", "prov_paris")
+	assert_true(second > first, "campanha: o id %d não é reaproveitado (novo: %d)" % [first, second])
+	var battle := new_battle()
+	var a := put(battle, "infantry", "A", "player", 1, 1)
+	battle.units[a]["destroyed"] = true
+	var b := put(battle, "infantry", "B", "player", 1, 1)
+	assert_true(b > a, "batalha: a unidade destruída continua no registro e seu id não é reaproveitado")
+	assert_eq(battle.units.size(), 2, "as duas existem")

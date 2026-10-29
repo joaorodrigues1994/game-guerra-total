@@ -234,6 +234,20 @@ func test_invalid_unit_entries_are_rejected() -> void:
 		_assert_rejected(registry, scenario, c[2], c[0])
 
 
+func test_duplicate_source_ids_are_rejected_but_zero_may_repeat() -> void:
+	var registry := battle_registry()
+	var scenario := _scenario()
+	scenario["units"][1]["source_id"] = 11  # mesma unidade de origem que "P1"
+	_assert_rejected(registry, scenario, "source_id 11 repetido", "source_id repetido")
+	scenario = _scenario()
+	scenario["units"][0]["source_id"] = 0
+	scenario["units"][1]["source_id"] = 0
+	assert_eq(registry.validate_scenario(scenario), PackedStringArray(), "0 = sem origem: pode repetir")
+	scenario = _scenario()
+	scenario["units"].append({"side": "player", "type": "infantry", "name": "P2", "at": [0, 2], "source_id": 12})
+	assert_eq(registry.validate_scenario(scenario), PackedStringArray(), "ids de origem diferentes: válido")
+
+
 func test_invalid_sides_are_rejected() -> void:
 	var registry := battle_registry()
 	var scenario := _scenario()

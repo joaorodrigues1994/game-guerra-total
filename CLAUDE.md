@@ -14,7 +14,7 @@ Jogo de estratégia histórica por turnos (Guerras Napoleônicas) em **Godot 4.7
 
 ## Comandos
 
-Testes headless (esperado: 0 falhas **e stderr vazio** — o executor não detecta erro de script em tempo de execução):
+Testes headless (esperado: 0 falhas, código de saída 0 **e stderr vazio**; o executor conta erros de execução como falha, mas rode com `timeout 300 ...` porque um laço infinito num teste ainda trava o processo):
 
 ```
 "E:/Guerra Total - Brazil/Godot_v4.7.2-stable/Godot_v4.7.2-stable_win64_console.exe" --headless --path "E:/Guerra Total - Brazil" --script res://tests/run_tests.gd

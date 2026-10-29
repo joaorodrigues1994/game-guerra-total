@@ -201,6 +201,7 @@ func _validate_scenario_units(s: Dictionary, ctx: String, rows: Array, legend: D
 		errors.append("%s: units deve ser uma lista" % ctx)
 		return
 	var taken := {}
+	var source_ids := {}
 	var per_side := {"player": 0, "enemy": 0}
 	for u in s["units"]:
 		if typeof(u) != TYPE_DICTIONARY:
@@ -216,6 +217,10 @@ func _validate_scenario_units(s: Dictionary, ctx: String, rows: Array, legend: D
 			errors.append("%s: tipo desconhecido (%s)" % [label, str(u.get("type"))])
 		if u.has("source_id") and (not _is_number(u["source_id"]) or u["source_id"] < 0 or u["source_id"] != floorf(u["source_id"])):
 			errors.append("%s: source_id deve ser um inteiro >= 0" % label)
+		elif u.has("source_id") and u["source_id"] > 0:
+			if source_ids.has(int(u["source_id"])):
+				errors.append("%s: source_id %d repetido (cada unidade de origem só pode aparecer uma vez)" % [label, int(u["source_id"])])
+			source_ids[int(u["source_id"])] = true
 		var at: Variant = u.get("at")
 		if typeof(at) != TYPE_ARRAY or (at as Array).size() != 2 \
 				or not _is_number(at[0]) or not _is_number(at[1]) \

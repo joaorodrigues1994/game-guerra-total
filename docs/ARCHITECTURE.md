@@ -237,10 +237,10 @@ if r["ok"]:
 | Dado | Regra |
 |---|---|
 | Tipo | categoria da unidade de campanha (`units.json` `category`) -> tipo tático com o mesmo `campaign_category`: infantry -> infantaria, cavalry -> cavalaria, artillery -> artilharia. Categoria sem tipo (ou ambígua) é erro |
-| Efetivo | efetivo **atual** da instância, limitado a `max_strength` do tipo tático; `< 1` é erro (destruída não entra). `conversion[]` informa `strength_clamped` |
-| Moral | moral **atual** da instância, **sem reescalar** (60–70 permanece 60–70 na escala 0–100), limitada a `max_morale`; `< 1` é erro |
+| Efetivo | efetivo **atual** da instância, copiado **sem alteração**. `< 1` é erro (destruída não entra) e **acima do `max_strength` do tipo tático é erro** (nunca é reduzido em silêncio: o resultado tático sempre pode ser comparado com o instantâneo do pedido, sem perda oculta). Hoje a campanha não cria efetivo acima do da definição (500/200/80 = máximos táticos), então o erro só ocorre com dados incoerentes, e a mensagem diz qual unidade e quais valores. `conversion[]` traz o efetivo convertido |
+| Moral | moral **atual** da instância, **sem reescalar** (60–70 permanece 60–70 na escala 0–100). `< 1` ou acima de `max_morale` é erro (nunca reduzida em silêncio) |
 | Ataque, defesa, alcance, mobilidade | dos dados táticos (a batalha é a autoridade); os valores de campanha não são usados. Experiência e generais: sem efeito |
-| `source_id` | id da instância de unidade da campanha. É suficiente para distinguir as participantes porque o `GameState` o atribui por `next_unit_id` (único); o construtor **verifica** a unicidade (repetição entre exércitos, colisão de instâncias, id < 1). O exército de origem não vai no cenário: está em `request.unit_army` |
+| `source_id` | id da instância de unidade da campanha. **Suficiente** para identificar a participante: o `GameState` o atribui por `next_unit_id`, que só cresce (**nunca reaproveita** ids, nem depois que unidades forem removidas; testado); o construtor **verifica** a unicidade (repetição entre exércitos, colisão de instâncias, id < 1) e o validador de cenário **rejeita `source_id` repetido** (0 = sem origem, pode repetir). Durante a batalha a unidade tática guarda o `source_id` (unidades destruídas continuam no registro, então o id tático também nunca é reaproveitado) e `BattleState.result_summary()` devolve, por unidade, `unit_id`, `source_id`, estado e efetivo/moral finais: o exército de origem é recuperado por `request.unit_army[source_id]`, **nunca pela posição no array**. O exército de origem não vai no cenário |
 | Nome | `"<nome da unidade> #<id>"` |
 | Semente | `seed_salt + id do encontro` (cenário e mapa): mesmo encontro e dados = mesmo cenário |
 | Limite | `columns x altura` unidades por lado (2 x 9 = 18); acima disso erro, sem descartar |
@@ -250,6 +250,11 @@ if r["ok"]:
 **Implantação:** jogador a oeste, adversário a leste, nas 2 primeiras colunas de cada borda (`deployment_slots`: coluna mais interna primeiro; em cada coluna do centro para as pontas). Unidades ordenadas por **id do exército e id da unidade** (nunca pela ordem de iteração de dicionários). Os cenários de teste existentes não mudam.
 
 **Exemplo** (encontro em Alsácia, `river_valley`): infantaria francesa #8 (efetivo 320, moral 55) -> `{"side":"player","type":"infantry","at":[1,4],"source_id":8,"strength":320,"morale":55}`; cavalaria #9 (200/65) -> `at [1,3]`; infantaria austríaca #6 (500/70) -> `{"side":"enemy","at":[10,4],"source_id":6}`; artilharia #7 (80/60) -> `at [10,3]`; semente 1001; mapa com rio na coluna 6.
+
+**Decisões e limitações conhecidas (aprovadas na revisão das Etapas 2 e 3):**
+- Efetivo ou moral acima do máximo do tipo tático é **erro explícito**, nunca limitado em silêncio. **Não** se introduz `max_strength` por unidade; revisitar só se a campanha passar a criar efetivo acima do máximo tático.
+- Uma unidade que entra em batalha com moral <= `rout_threshold` (25) nasce **abalada**, não em retirada; a retirada só começa quando a moral cai por um golpe. Comportamento mantido; **decisão futura:** avaliar se deveria nascer em retirada (não ocorre hoje: a moral inicial da campanha é 60–70).
+- `BattleState.add_unit` chamado **diretamente** limita o efetivo ao máximo do tipo sem avisar. Limitação conhecida; não afeta o fluxo por cenário (`setup_from_scenario` valida antes).
 
 **Fora de escopo (Etapas 4 a 6):** registro de batalhas em `GameState`, bloqueio de exércitos e do turno, botão/fluxo na interface, aplicação de baixas e sobreviventes, dissolução de exércitos vazios, cancelamento, conquista.
 
@@ -265,6 +270,6 @@ if r["ok"]:
 godot --headless --path . --script res://tests/run_tests.gd
 ```
 
-O executor roda os testes após o primeiro frame (para os testes de UI terem a árvore de cena) e aceita testes que aguardam frames. Um teste sem nenhuma asserção conta como falha. Limitação: um erro de script em tempo de execução não derruba o executor; confira também se o stderr está vazio.
+O executor roda os testes após o primeiro frame (para os testes de UI terem a árvore de cena) e aceita testes que aguardam frames. Um teste sem nenhuma asserção conta como falha. **Erros de execução contam como falha:** GDScript não tem try/catch e um erro de execução (índice fora do limite, chamada em null, assert) apenas aborta a função do teste, o que antes podia deixar o teste "ok" se ele já tivesse feito alguma asserção. O executor registra um `Logger` (`OS.add_logger`) durante a execução e marca como FALHA, com a mensagem da engine, qualquer teste durante o qual a engine tenha emitido um erro (avisos são ignorados). Um arquivo de teste que não compila, ou que erra ao carregar, também vira falha. Há um relógio de segurança (`WATCHDOG_SECONDS`, 900 s): se a execução passar disso, imprime "tempo esgotado" e sai com código 2. `-- --only=<arquivo em tests/>` roda um único arquivo (usado por `tests/test_runner_detects_errors.gd`, que executa o executor em outro processo contra `tests/fixtures/runtime_error_fixture.gd` para provar que um teste que quebra nunca é reportado como sucesso). Um laço infinito dentro de um teste ainda bloqueia o processo (o relógio não pode interrompê-lo): rode sempre com `timeout 300 ...`.
 
 Qualquer `tests/test_*.gd` que estenda `tests/test_case.gd` é descoberto automaticamente; métodos `test_*` são executados. Código de saída 0 = sucesso; nenhum teste executado conta como falha.

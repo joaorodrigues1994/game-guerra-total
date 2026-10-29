@@ -20,8 +20,11 @@ Instruções permanentes: `CLAUDE.md`. Desenho do jogo: `GAME_DESIGN.md`. Decis�
 | `8c4e6ce` | Docs: HANDOFF.md e CLAUDE.md |
 | `1a5e409` | Batalha tática: primeira batalha jogável (independente da campanha) |
 | `ff38999` | Batalha: corrige retirada bloqueada por unidades aliadas (Etapa 1 da integração) |
+| `5bd1830` | Batalha: API de cenários em memória e sua validação (Etapa 2 da integração) |
+| `81b0c28` | Integração: adaptador campanha → batalha e mapeamentos (Etapa 3) |
+| (commit seguinte) | Revisão técnica das Etapas 2 e 3: efetivo/moral sem perda silenciosa, `source_id` repetido, executor de testes com detecção de erros de execução, decisões aprovadas |
 
-**Alterações atuais NÃO commitadas:** Etapa 2 (API de cenários em memória: `BattleState.setup_from_scenario`, `BattleRegistry.validate_scenario`, `source_id` opcional, `tests/test_battle_scenario.gd`, 18 testes) e **Etapa 3** (camada adaptadora `src/integration/`: `battle_request.gd`, `battle_scenario_builder.gd`, `data/battle/campaign_mapping.json`, `tests/test_battle_integration.gd`, 30 testes). Aguardam revisão e autorização de commit.
+**Estado do Git:** as Etapas 1, 2 e 3 e a revisão técnica estão commitadas (a árvore de trabalho deve estar limpa). **Nada foi enviado ao remoto** (push pendente de autenticação). A Etapa 4 NÃO foi iniciada.
 
 ## Estado por funcionalidade
 
@@ -35,8 +38,9 @@ Legenda: **Validada** = testes automatizados passando *e* o usuário confirmou m
 | Exércitos, generais, movimentação, encontros, marcadores no mapa | **Testada** (validação manual do usuário não registrada; o commit foi autorizado) |
 | **Batalha tática** (hexágonos, terrenos, turnos, movimento, ataques, moral, retirada, vitória, IA básica, reinício, interface) | **Validada** (o usuário a testou manualmente e a considerou aceitável); commitada em `1a5e409` |
 | Correção da retirada bloqueada por aliadas (Etapa 1 da integração) | **Validada** (o usuário validou manualmente); commitada em `ff38999` |
-| API de cenários em memória (Etapa 2: `setup_from_scenario`, `validate_scenario`) | **Testada** (18 testes novos; falham sem a validação). **Aguarda revisão; não commitada** |
-| Camada adaptadora campanha→batalha (Etapa 3: encontro -> cenário tático) | **Testada** (30 testes novos, incluindo mutação). **Aguarda revisão; não commitada.** Somente leitura: não inicia batalha nem altera a campanha |
+| API de cenários em memória (Etapa 2: `setup_from_scenario`, `validate_scenario`) | **Testada** (18 testes novos; falham sem a validação); revisada e commitada em `5bd1830` |
+| Revisão técnica das Etapas 2 e 3 (efetivo/moral sem perda silenciosa, `source_id` repetido, executor de testes) | **Testada** (+6 testes); aprovada pelo usuário e commitada (commit seguinte a `81b0c28`) |
+| Camada adaptadora campanha→batalha (Etapa 3: encontro -> cenário tático) | **Testada** (30 testes novos, incluindo mutação). **Revisada e commitada em `81b0c28`.** Somente leitura: não inicia batalha nem altera a campanha |
 | Integração campanha↔batalha (registro de batalhas, bloqueios, interface, aplicação do resultado) | **Plano aprovado (decisões D1–D8, abaixo); Etapas 1, 2 e 3 feitas; Etapas 4 a 6 NÃO implementadas.** Conquista/retirada do perdedor: fora de escopo |
 | IA estratégica, diplomacia, guerra | Planejadas |
 | Conteúdo histórico, eventos, mais províncias | Planejados |
@@ -57,13 +61,13 @@ Comando (saída capturada, código de saída verificado):
 "E:/Guerra Total - Brazil/Godot_v4.7.2-stable/Godot_v4.7.2-stable_win64_console.exe" --headless --path "E:/Guerra Total - Brazil" --script res://tests/run_tests.gd
 ```
 
-- **327 testes, 7372 asserções, 0 falhas**, código de saída 0, saída de erro vazia. Comparação com a referência anterior (297 testes, 6634 asserções, 0 falhas, confirmada por nova execução antes de começar): os 297 continuam passando sem alteração de conteúdo; somam-se 30 testes e 738 asserções novos (`test_battle_integration`). (Histórico: 265/6257 antes da retirada; +14 dela; +18 da API de cenários.)
-- Mutação (Etapa 3): com a semente constante, o efetivo trocado pelo máximo e a colisão de ids ignorada, 3 funções de teste falham; restauradas, 0 falhas. (A mutação "limite ignorado" gera erro de índice em tempo de execução; o executor não conta isso como falha — limitação já documentada: confira o stderr.) Com a validação desligada em `setup_from_scenario` (Etapa 2), 9 funções falham; com o código antigo da retirada, 6.
+- **333 testes, 7485 asserções, 0 falhas**, código de saída 0, saída de erro vazia. Comparação com a referência anterior (327 testes, 7372 asserções, 0 falhas, confirmada por nova execução antes de começar a revisão): +6 testes e +113 asserções legítimos da revisão das Etapas 2 e 3 (ver "Revisão técnica das Etapas 2 e 3" abaixo). (Histórico: 265/6257 antes da retirada; +14 dela; +18 da API de cenários; +30 da camada adaptadora.)
+- Mutação (Etapa 3): com a semente constante, o efetivo trocado pelo máximo e a colisão de ids ignorada, 3 funções de teste falham; restauradas, 0 falhas. (A mutação "limite ignorado" gera erro de índice em tempo de execução; ANTES da revisão o executor a deixava passar com código 0; agora ela é reportada como FALHA, código 1.) Com a validação desligada em `setup_from_scenario` (Etapa 2), 9 funções falham; com o código antigo da retirada, 6.
 - Testes da batalha em `tests/` (inclui `test_battle_retreat`, 14, `test_battle_scenario`, 18, e `test_battle_integration`, 30, da camada adaptadora): `test_hex` (9), `test_battle_map` (dados, mapa, caminhos), `test_battle_turns` (movimento, seleção, turnos), `test_battle_combat` (ataques, terreno, tipos, moral), `test_battle_victory` (retirada, vitória, reinício), `test_battle_ai` (IA, controlador), `test_battle_ui` (interface e integração com a campanha). Base compartilhada: `tests/battle_case.gd` (não começa com `test_`, então o executor não a roda como teste).
 - A cena principal e a cena da batalha executam sem erros em modo headless (`--quit-after`, sem stderr).
 - Foi feita "mutação" manual (quebrar regras de propósito: terreno ignorado, hexágono ocupado aceito, retirada podendo atacar, ações não restauradas, moral inerte): os testes falharam (10 falhas) e voltaram a 0 ao restaurar.
 - Simulações IA contra IA (8 sementes): todas terminam em 9–10 turnos; o lado que joga primeiro (jogador) venceu todas — equilíbrio do cenário de teste não foi ajustado.
-- **Limitação do executor de testes:** um erro de script em tempo de execução não derruba o executor (só testes sem nenhuma asserção contam como falha). Sempre confira também se o **stderr está vazio**. Um arquivo de teste com erro de sintaxe agora vira uma falha explícita (antes o executor ficava pendurado sem terminar); mesmo assim rode a suíte com limite de tempo (`timeout 240 ...`).
+- **Executor de testes (corrigido na revisão):** erros de execução dentro de um teste agora contam como FALHA (Logger da engine), arquivo que não compila vira falha, e há relógio de segurança (900 s, código 2). Provado por `tests/test_runner_detects_errors.gd` (executa o executor em outro processo contra uma fixture que quebra). Resta: um **laço infinito** dentro de um teste trava o processo; rode sempre com `timeout 300 ...`. Continue conferindo código de saída e stderr.
 
 ## Validação visual
 
@@ -101,6 +105,15 @@ Comando (saída capturada, código de saída verificado):
 2. Só então a **Etapa 4** (plano aprovado, com as decisões D1–D8 abaixo; as Etapas 2 e 3 já existem; a camada `src/integration/` já tem `BattleRequest` e `BattleScenarioBuilder`): registro `GameState.battles`, bloqueio de exércitos e do turno, aplicação do resultado. Descrição original das etapas: camada `src/integration/` (`battle_request`, `battle_scenario_builder`, `data/battle/campaign_mapping.json`); Etapa 4 registro `GameState.battles` + aplicação transacional e idempotente do resultado; Etapa 5 botão "Iniciar batalha" e fluxo de interface; Etapa 6 testes e docs. Resumo do objetivo:
    **integração campanha↔batalha** (Fase 3 do `GAME_DESIGN.md`): a partir de um encontro, montar o cenário (terreno da província, exércitos), jogar a batalha (ou resolver automaticamente) e aplicar o `BattleResult` na campanha (baixas por `source_id`, destruição, controle da província). Antes de implementar, apresentar plano e critérios, como nas etapas anteriores.
 
+### Revisão técnica das Etapas 2 e 3 (resultado)
+
+- **Efetivo acima do máximo tático:** risco CONFIRMADO e corrigido. Antes o construtor limitava o efetivo (900 -> 500) mantendo `ok = true`, enquanto o pedido guardava 900: ao voltar à campanha a unidade pareceria perder 400 homens sem batalha. Agora efetivo ou moral acima do máximo do tipo tático é **erro explícito** (nada é reduzido em silêncio) e a conversão copia os valores exatos. Hoje a campanha não gera esses valores (máximos de campanha = máximos táticos), então só dados incoerentes disparam o erro. Preservar efetivos maiores que o máximo exigiria um `max_strength` por unidade no cenário tático (mudança de modelo): **decidido pelo usuário: NÃO introduzir agora**; manter o erro explícito (revisitar só se a campanha passar a criar efetivo acima do máximo tático).
+- **Moral:** sempre cabe (campanha 60–70, máximo 100); `< 1` ou `> max` é erro.
+- **IDs:** o mecanismo atual é **suficiente** (instâncias com `next_unit_id` que só cresce; id tático idem; `result_summary` traz `source_id` por unidade). Acrescentado: o validador de cenário agora **rejeita `source_id` repetido** (antes só o construtor checava). Testado: correspondência por `source_id` após mover/destruir/embaralhar, e não reutilização de ids.
+- **Executor de testes:** defeito CONFIRMADO (um teste com uma asserção seguida de erro de execução saía "ok", código 0, "0 falhas") e corrigido (Logger + fixture + teste).
+- **Verificações da seção de cenários:** terreno desconhecido é erro; geração determinística; cenário validado antes de ser devolvido; campanha intocada em sucesso e falha; excesso de unidades recusado sem erro de execução (agora o teste falha de forma detectável se a checagem for removida). Nenhum defeito novo.
+- **Decisões aprovadas pelo usuário sobre as observações (sem alterar regras):** (1) `BattleState.add_unit` chamado **diretamente** continua limitando o efetivo ao máximo do tipo sem avisar; é uma limitação conhecida e documentada, que **não afeta** o fluxo por cenário validado (o validador recusa efetivo acima do máximo antes de `add_unit`). (2) **Moral baixa na entrada:** mantém-se o comportamento atual: uma unidade criada com moral <= 25 nasce "abalada", **não** em retirada (a retirada só começa quando a moral cai por um golpe). **Decisão futura registrada:** avaliar se unidades que já entram abaixo do limite de retirada deveriam nascer em retirada; hoje não ocorre (moral inicial da campanha: 60–70).
+
 ### Decisões aprovadas para a integração (D1–D8)
 
 - D1 encontro pendente = gatilho; só 2 países, um deles o do jogador; outros casos recusados. D2 mapa gerado de forma determinística (semente = id do encontro) a partir do terreno da província, via `data/battle/campaign_mapping.json` (montanha → colina; vale fluvial → planície com rio e vaus; sem fortificação). D3 jogador a oeste, inimigo a leste, nas 2 primeiras colunas; limite de 18 unidades por lado. D4 tipo por `campaign_category`; efetivo atual limitado ao máximo; moral da instância sem reescalar; ataque/defesa/alcance dos dados táticos; sem efeito de experiência/general. D5 sobreviventes devolvem efetivo e moral; destruídas são removidas (exército vazio é desfeito, general liberado); fugidas continuam no exército. D6 sem conquista nem retirada forçada; o encontro é resolvido e removido. D7 voltar antes do fim cancela sem efeito. D8 o turno da campanha fica bloqueado durante batalha ativa. Um botão "Criar encontro de teste" rotulado como ferramenta de teste foi proposto para a validação manual.
@@ -129,8 +142,8 @@ Na batalha de teste, deixar uma unidade ficar em retirada (atacá-la repetidamen
 
 ```
 cd "E:/Guerra Total - Brazil"
-git status                      # alterações das Etapas 2 e 3 podem estar não commitadas
-git log --oneline               # topo: ff38999
+git status                      # deve estar limpo
+git log --oneline               # topo: o commit da revisão técnica, sobre 81b0c28 e 5bd1830
 ```
 
 Rodar os testes: comando acima (esperado: 327 testes, 0 falhas, stderr vazio).

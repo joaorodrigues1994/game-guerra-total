@@ -8,8 +8,10 @@ extends RefCounted
 ## Conversões (documentadas em docs/ARCHITECTURE.md):
 ##  - Tipo: categoria da unidade de campanha (units.json "category") -> tipo tático com o mesmo
 ##    "campaign_category" (unit_types.json). Cada categoria deve ter exatamente um tipo tático.
-##  - Efetivo: o ATUAL da instância de campanha, limitado ao máximo do tipo tático (1 .. max_strength).
-##  - Moral: a ATUAL da instância, sem reescalar, limitada a max_morale (1 .. max_morale).
+##  - Efetivo: o ATUAL da instância de campanha, copiado SEM alteração (1 .. max_strength do tipo tático).
+##  - Moral: a ATUAL da instância, copiada sem reescalar (1 .. max_morale). Valor acima do máximo tático é
+##    ERRO (nunca é reduzido em silêncio): assim o efetivo/moral do resultado tático sempre pode ser
+##    comparado com o instantâneo do pedido sem inconsistência.
 ##  - Ataque, defesa, alcance e mobilidade: dos dados táticos (a batalha é a autoridade); experiência
 ##    e generais não têm efeito nesta etapa.
 ##  - source_id: id da instância de unidade da campanha (único e >= 1).
@@ -225,8 +227,16 @@ static func _convert_unit(registry: RefCounted, state: RefCounted, battle_regist
 	if typeof(unit["morale"]) != TYPE_INT or unit["morale"] < 1:
 		errors.append("%s: moral inválida (%s); esperado um inteiro >= 1." % [label, str(unit["morale"])])
 		return {}
-	var strength := mini(unit["strength"], int(tactical["max_strength"]))
-	var morale := mini(unit["morale"], int(tactical["max_morale"]))
+	# Nada é reduzido em silêncio: efetivo ou moral acima do máximo do tipo tático é erro. Hoje a campanha
+	# não cria efetivo acima do da definição (== máximo tático), então isto só dispara com dados incoerentes.
+	if unit["strength"] > int(tactical["max_strength"]):
+		errors.append("%s: efetivo %d acima do máximo do tipo tático '%s' (%d); o efetivo da campanha não é reduzido em silêncio." % [
+			label, unit["strength"], tactical_id, int(tactical["max_strength"])])
+		return {}
+	if unit["morale"] > int(tactical["max_morale"]):
+		errors.append("%s: moral %d acima do máximo do tipo tático '%s' (%d); a moral da campanha não é reduzida em silêncio." % [
+			label, unit["morale"], tactical_id, int(tactical["max_morale"])])
+		return {}
 	return {
 		"unit": {
 			"side": side,
@@ -234,14 +244,12 @@ static func _convert_unit(registry: RefCounted, state: RefCounted, battle_regist
 			"name": "%s #%d" % [def["name"], unit_id],
 			"at": [slot.x, slot.y],
 			"source_id": unit_id,
-			"strength": strength,
-			"morale": morale,
+			"strength": unit["strength"],
+			"morale": unit["morale"],
 		},
 		"info": {
 			"source_id": unit_id, "side": side, "campaign_type": unit["type"], "tactical_type": tactical_id,
-			"strength_campaign": unit["strength"], "strength": strength, "strength_clamped": strength != unit["strength"],
-			"morale_campaign": unit["morale"], "morale": morale, "morale_clamped": morale != unit["morale"],
-			"at": [slot.x, slot.y],
+			"strength": unit["strength"], "morale": unit["morale"], "at": [slot.x, slot.y],
 		},
 	}
 
