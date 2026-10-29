@@ -10,11 +10,25 @@ extends RefCounted
 ##    encontro pendente (state.encounters), e os exércitos envolvidos ficam parados até ele ser resolvido
 ##    (a resolução virá com as batalhas).
 ##
+## BLOQUEIO POR BATALHA: um exército de uma batalha ATIVA (GameState.battles) não pode se mover, receber ou
+## perder unidades nem ter o general alterado, e nenhum exército pode entrar na província de uma batalha
+## ativa (o encontro dela está congelado). Todas as verificações passam por battle_lock_reason / check_*:
+## a interface não é a única barreira.
+##
 ## Regra de incorporação de recrutas: a unidade concluída entra no primeiro exército do mesmo país, na mesma
 ## província, com vaga e fora de encontro; se não houver, forma-se um novo exército com ela.
 
 
 # --- Consultas -----------------------------------------------------------------
+
+## Motivo do bloqueio do exército por uma batalha ativa; "" se ele está livre.
+static func battle_lock_reason(state: RefCounted, army_id: int) -> String:
+	var battle_id: int = state.battle_of_army(army_id)
+	if battle_id == 0:
+		return ""
+	return "O exército %s está na batalha ativa #%d e fica bloqueado (não se move nem tem unidades ou general alterados) até ela ser concluída ou cancelada." % [
+		state.armies[army_id]["name"], battle_id]
+
 
 static func max_units(registry: RefCounted) -> int:
 	return int(registry.rules["max_army_units"])
@@ -49,12 +63,19 @@ static func check_move(registry: RefCounted, state: RefCounted, country_id: Stri
 	var army: Dictionary = state.armies[army_id]
 	if army["owner"] != country_id:
 		return "Este exército pertence a outro país: você não pode dar ordens a ele."
+	var lock := battle_lock_reason(state, army_id)
+	if not lock.is_empty():
+		return lock
 	if is_engaged(state, army_id):
 		return "Este exército está em um encontro pendente com forças estrangeiras e não pode se mover."
 	if army["moved"]:
 		return "Este exército já se moveu neste turno."
 	if not registry.provinces.has(destination_id):
 		return "Província de destino inexistente."
+	var battles_there: Array[int] = state.active_battles_in(destination_id)
+	if not battles_there.is_empty():
+		return "Há uma batalha ativa (#%d) em %s: nenhum exército pode entrar até ela ser concluída ou cancelada." % [
+			battles_there[0], registry.provinces[destination_id]["name"]]
 	if destination_id == army["province"]:
 		return "O exército já está nesta província."
 	var connected := false
@@ -121,6 +142,9 @@ static func _register_encounter(state: RefCounted, army_id: int) -> Dictionary:
 static func refresh_encounters(state: RefCounted) -> void:
 	var kept: Array[Dictionary] = []
 	for encounter in state.encounters:
+		if state.battle_of_encounter(encounter["id"]) != 0:
+			kept.append(encounter)  # congelado enquanto a batalha estiver ativa
+			continue
 		var present: Array[int] = []
 		var countries := {}
 		for army_id in encounter["armies"]:
@@ -148,6 +172,9 @@ static func check_add_unit(registry: RefCounted, state: RefCounted, country_id: 
 	var army: Dictionary = state.armies[army_id]
 	if army["owner"] != country_id:
 		return "Este exército pertence a outro país."
+	var add_lock := battle_lock_reason(state, army_id)
+	if not add_lock.is_empty():
+		return add_lock
 	var unit: Dictionary = state.unit_by_id(unit_id)
 	if unit.is_empty():
 		return "Unidade inexistente."
@@ -180,6 +207,9 @@ static func check_detach(registry: RefCounted, state: RefCounted, country_id: St
 	var army: Dictionary = state.armies[army_id]
 	if army["owner"] != country_id:
 		return "Este exército pertence a outro país."
+	var detach_lock := battle_lock_reason(state, army_id)
+	if not detach_lock.is_empty():
+		return detach_lock
 	if not (unit_id in army["units"]):
 		return "A unidade não pertence a este exército."
 	if state.owner_of(army["province"]) != country_id:
@@ -242,7 +272,8 @@ static func form_army(registry: RefCounted, state: RefCounted, country_id: Strin
 static func incorporate_new_unit(registry: RefCounted, state: RefCounted, unit_id: int) -> int:
 	var unit: Dictionary = state.unit_by_id(unit_id)
 	for army_id in state.armies_in(unit["province"], unit["owner"]):
-		if not is_engaged(state, army_id) and state.armies[army_id]["units"].size() < max_units(registry):
+		if not is_engaged(state, army_id) and battle_lock_reason(state, army_id).is_empty() \
+				and state.armies[army_id]["units"].size() < max_units(registry):
 			state.armies[army_id]["units"].append(unit_id)
 			return army_id
 	var new_id: int = state.create_army(_new_army_name(registry, state, unit["province"]), unit["owner"], unit["province"])
@@ -268,6 +299,9 @@ static func check_assign_general(registry: RefCounted, state: RefCounted, countr
 	var army: Dictionary = state.armies[army_id]
 	if army["owner"] != country_id:
 		return "Este exército pertence a outro país."
+	var assign_lock := battle_lock_reason(state, army_id)
+	if not assign_lock.is_empty():
+		return assign_lock
 	if not state.generals.has(general_id):
 		return "General inexistente."
 	var general_name: String = registry.generals[general_id]["name"]
@@ -296,6 +330,9 @@ static func check_unassign_general(state: RefCounted, country_id: String, army_i
 		return "Exército inexistente."
 	if state.armies[army_id]["owner"] != country_id:
 		return "Este exército pertence a outro país."
+	var unassign_lock := battle_lock_reason(state, army_id)
+	if not unassign_lock.is_empty():
+		return unassign_lock
 	if str(state.armies[army_id]["general"]).is_empty():
 		return "O exército não tem general."
 	return ""

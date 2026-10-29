@@ -60,6 +60,8 @@ func _run_phase(phase: StringName, registry: RefCounted, state: RefCounted, repo
 		&"validate_state":
 			for problem in validate_state(registry, state):
 				report["errors"].append(problem)
+			for blocker in turn_blockers(registry, state):
+				report["errors"].append(blocker)
 		&"income_expenses":
 			_income_expenses(registry, state, report)
 		&"construction_progress":
@@ -77,6 +79,16 @@ func _run_phase(phase: StringName, registry: RefCounted, state: RefCounted, repo
 				bus.turn_ended.emit(state.turn)
 		_:
 			pass  # ai_actions e military_movement: implementados nas fases seguintes.
+
+
+## Condições (não são inconsistências) que impedem encerrar o turno: hoje, batalha ativa. É checada na etapa
+## validate_state, então a tentativa falha de forma controlada, sem alterar nada nem processar parcialmente.
+func turn_blockers(registry: RefCounted, state: RefCounted) -> PackedStringArray:
+	var blockers := PackedStringArray()
+	for battle_id in state.active_battles():
+		blockers.append("Há uma batalha ativa (#%d em %s): conclua ou cancele a batalha antes de encerrar o turno." % [
+			battle_id, registry.provinces[state.battles[battle_id]["province"]]["name"]])
+	return blockers
 
 
 ## Lista de problemas que impedem o processamento; vazia se o estado está consistente.
@@ -105,6 +117,57 @@ func validate_state(registry: RefCounted, state: RefCounted) -> PackedStringArra
 		if not registry.units.has(unit["type"]) or not state.provinces.has(unit["province"]):
 			problems.append("Unidade inválida: %s" % str(unit["id"]))
 	problems.append_array(_validate_armies(state))
+	problems.append_array(_validate_battles(registry, state))
+	return problems
+
+
+## Registro de batalhas: ids coerentes e, nas ATIVAS, participantes existentes, na província da batalha, com a
+## mesma composição do instantâneo, sem exército em duas batalhas e com o encontro ainda vinculado.
+func _validate_battles(registry: RefCounted, state: RefCounted) -> PackedStringArray:
+	var problems := PackedStringArray()
+	var locked_by := {}
+	for battle_id in state.battles:
+		var battle: Dictionary = state.battles[battle_id]
+		if battle_id >= state.next_battle_id or battle.get("id") != battle_id:
+			problems.append("Registro de batalha inconsistente: id %s" % str(battle_id))
+		var malformed := false
+		for key in ["encounter_id", "province", "armies", "units"]:
+			malformed = malformed or not battle.has(key)
+		if malformed or typeof(battle.get("armies")) != TYPE_ARRAY or typeof(battle.get("units")) != TYPE_DICTIONARY:
+			problems.append("Batalha %s com registro incompleto (faltam encounter_id, province, armies ou units)." % str(battle_id))
+			continue
+		if not (battle.get("status") in [state.BATTLE_ACTIVE, state.BATTLE_APPLIED, state.BATTLE_CANCELLED]):
+			problems.append("Batalha %s com estado inválido: %s" % [str(battle_id), str(battle.get("status"))])
+			continue
+		if battle["status"] != state.BATTLE_ACTIVE:
+			continue
+		if not registry.provinces.has(battle["province"]):
+			problems.append("Batalha %d em província inexistente: %s" % [battle_id, str(battle["province"])])
+		var linked := false
+		for encounter in state.encounters:
+			linked = linked or (encounter.get("battle_id") == battle_id and encounter["id"] == battle["encounter_id"])
+		if not linked:
+			problems.append("Batalha ativa %d sem encontro vinculado (encontro #%s)." % [battle_id, str(battle["encounter_id"])])
+		for army_id in battle["armies"]:
+			if locked_by.has(army_id):
+				problems.append("O exército %d está em mais de uma batalha ativa (%d e %d)." % [army_id, locked_by[army_id], battle_id])
+			locked_by[army_id] = battle_id
+			if not state.armies.has(army_id):
+				problems.append("Batalha %d: o exército %d não existe mais." % [battle_id, army_id])
+			elif state.armies[army_id]["province"] != battle["province"]:
+				problems.append("Batalha %d: o exército %d saiu da província da batalha." % [battle_id, army_id])
+		for unit_id in battle["units"]:
+			if state.army_of_unit(unit_id) != battle["units"][unit_id]["army"]:
+				problems.append("Batalha %d: a unidade %d não está mais no exército do instantâneo." % [battle_id, unit_id])
+	# Sentido inverso: todo vínculo "battle_id" de um encontro precisa apontar para uma batalha ATIVA dele.
+	for encounter in state.encounters:
+		if not encounter.has("battle_id"):
+			continue
+		var linked_id: Variant = encounter["battle_id"]
+		var target: Dictionary = state.battles.get(linked_id, {})
+		if target.is_empty() or target.get("status") != state.BATTLE_ACTIVE or target.get("encounter_id") != encounter["id"]:
+			problems.append("O encontro #%s aponta para a batalha %s, que não existe, não está ativa ou é de outro encontro." % [
+				str(encounter["id"]), str(linked_id)])
 	return problems
 
 

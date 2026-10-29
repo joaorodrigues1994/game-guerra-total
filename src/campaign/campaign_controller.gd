@@ -311,6 +311,8 @@ func army_view(army_id: int) -> Dictionary:
 		status = "Encontro pendente em %s: parado até a resolução." % province_name
 	elif army["moved"]:
 		status = "Já se moveu neste turno."
+	if state.battle_of_army(army_id) != 0:
+		status = "Em batalha ativa #%d: bloqueado até ela ser concluída ou cancelada." % state.battle_of_army(army_id)
 
 	var destinations: Array[Dictionary] = []
 	var joinable: Array[Dictionary] = []

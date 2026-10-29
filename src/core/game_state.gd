@@ -35,8 +35,24 @@ var generals: Dictionary = {}
 
 ## Encontros pendentes entre exércitos de países diferentes na mesma província:
 ## [{id, province, turn, initiator, armies, countries}]. Contrato para uma futura batalha.
+## Enquanto uma batalha ATIVA estiver registrada para o encontro, ele ganha o campo "battle_id" (e continua
+## pendente: assim os exércitos seguem em encontro se a batalha for cancelada). O campo some ao cancelar.
 var encounters: Array[Dictionary] = []
 var next_encounter_id: int = 1
+
+## Registro de batalhas (histórico preservado: nunca se apaga uma batalha). id (inteiro sequencial) -> {
+##   id, encounter_id, province, turn (da campanha, no registro), status, countries [jogador, adversário],
+##   sides {player|enemy: {country, armies, units}}, armies (todos os participantes, ordenados),
+##   units {id da unidade: {army, type, category, owner, strength, morale}}   (INSTANTÂNEO antes da batalha),
+##   scenario_id, scenario (cópia do cenário tático gerado), result (vazio até o resultado ser aplicado),
+##   history [{status, turn}] }
+## Ciclo de vida (transições em BattleLifecycle): active -> applied | cancelled; applied e cancelled são finais.
+## Exércitos de uma batalha ATIVA ficam bloqueados (ver battle_of_army e ArmyActions).
+const BATTLE_ACTIVE := "active"
+const BATTLE_APPLIED := "applied"
+const BATTLE_CANCELLED := "cancelled"
+var battles: Dictionary = {}
+var next_battle_id: int = 1
 
 
 ## Cria o estado inicial a partir dos dados validados. Retorna false se o país do jogador não existir.
@@ -54,6 +70,8 @@ func setup_from_registry(registry: RefCounted, p_player_country_id: String) -> b
 	generals = {}
 	encounters = []
 	next_encounter_id = 1
+	battles = {}
+	next_battle_id = 1
 	for id in registry.countries:
 		var resources := {}
 		for res in registry.countries[id]["starting_resources"]:
@@ -208,6 +226,43 @@ func encounter_of_army(army_id: int) -> Dictionary:
 	return {}
 
 
+# --- Batalhas -----------------------------------------------------------------
+
+## Ids das batalhas ativas, ordenados.
+func active_battles() -> Array[int]:
+	var result: Array[int] = []
+	for battle_id in battles:
+		if battles[battle_id]["status"] == BATTLE_ACTIVE:
+			result.append(battle_id)
+	result.sort()
+	return result
+
+
+## Id da batalha ATIVA da qual o exército participa (e que o bloqueia); 0 se estiver livre.
+func battle_of_army(army_id: int) -> int:
+	for battle_id in active_battles():
+		if army_id in battles[battle_id]["armies"]:
+			return battle_id
+	return 0
+
+
+## Id da batalha ATIVA registrada para o encontro; 0 se não houver.
+func battle_of_encounter(encounter_id: int) -> int:
+	for battle_id in active_battles():
+		if battles[battle_id]["encounter_id"] == encounter_id:
+			return battle_id
+	return 0
+
+
+## Ids das batalhas ativas na província.
+func active_battles_in(province_id: String) -> Array[int]:
+	var result: Array[int] = []
+	for battle_id in active_battles():
+		if battles[battle_id]["province"] == province_id:
+			result.append(battle_id)
+	return result
+
+
 func to_dict() -> Dictionary:
 	return {
 		"turn": turn,
@@ -221,4 +276,6 @@ func to_dict() -> Dictionary:
 		"generals": generals.duplicate(true),
 		"encounters": encounters.duplicate(true),
 		"next_encounter_id": next_encounter_id,
+		"battles": battles.duplicate(true),
+		"next_battle_id": next_battle_id,
 	}

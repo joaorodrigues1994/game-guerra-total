@@ -7,7 +7,7 @@ Instruções permanentes: `CLAUDE.md`. Desenho do jogo: `GAME_DESIGN.md`. Decis�
 
 - Jogo de estratégia histórica por turnos (Guerras Napoleônicas), inspirado em EU4, Civilization e Total War: Warhammer. Interface em português do Brasil.
 - Raiz: `E:\Guerra Total - Brazil` · Godot **4.7.2** (executável na própria pasta, ignorado pelo Git) · GDScript · Windows.
-- Git: branch `main`. O remoto `origin` (`https://github.com/joaorodrigues1994/game-guerra-total.git`) existe e `origin/main` está em `8c4e6ce` (Docs: HANDOFF.md e CLAUDE.md): o usuário publicou até esse commit; **os commits posteriores (`1a5e409` em diante) ainda NÃO foram enviados**. O assistente não consegue autenticar no GitHub: o push é feito pelo usuário (ou autorizado por ele depois de autenticar; o erro de certificado SSL se contorna só no comando com `-c http.sslBackend=schannel`). Fim de linha: o Git avisa "LF will be replaced by CRLF" (normal no Windows; não há `.gitattributes`).
+- Git: branch `main`. O remoto `origin` (`https://github.com/joaorodrigues1994/game-guerra-total.git`) existe e, na última conferência (`git branch -vv`, início da Etapa 4), `origin/main` estava em `796bd2c`: o usuário publicou até a revisão técnica. O assistente não consegue autenticar no GitHub; o push é feito pelo usuário (`git -c http.sslBackend=schannel push origin main` contorna o erro de certificado só no comando). Fim de linha: o Git avisa "LF will be replaced by CRLF" (normal no Windows; não há `.gitattributes`).
 
 ## Histórico de commits
 
@@ -24,7 +24,7 @@ Instruções permanentes: `CLAUDE.md`. Desenho do jogo: `GAME_DESIGN.md`. Decis�
 | `81b0c28` | Integração: adaptador campanha → batalha e mapeamentos (Etapa 3) |
 | (commit seguinte) | Revisão técnica das Etapas 2 e 3: efetivo/moral sem perda silenciosa, `source_id` repetido, executor de testes com detecção de erros de execução, decisões aprovadas |
 
-**Estado do Git:** as Etapas 1, 2 e 3 e a revisão técnica estão commitadas (a árvore de trabalho deve estar limpa). O `main` local está 5 commits à frente de `origin/main` (`8c4e6ce`), conferido com `git branch -vv`. A Etapa 4 NÃO foi iniciada.
+**Estado do Git:** as Etapas 1, 2 e 3 e a revisão técnica estão commitadas e publicadas (até `796bd2c`). **A Etapa 4 (registro e ciclo de vida das batalhas) está implementada e testada, mas AINDA NÃO FOI COMMITADA** (aguarda a revisão e a autorização do usuário). A Etapa 5 NÃO foi iniciada.
 
 ## Estado por funcionalidade
 
@@ -41,7 +41,8 @@ Legenda: **Validada** = testes automatizados passando *e* o usuário confirmou m
 | API de cenários em memória (Etapa 2: `setup_from_scenario`, `validate_scenario`) | **Testada** (18 testes novos; falham sem a validação); revisada e commitada em `5bd1830` |
 | Revisão técnica das Etapas 2 e 3 (efetivo/moral sem perda silenciosa, `source_id` repetido, executor de testes) | **Testada** (+6 testes); aprovada pelo usuário e commitada (commit seguinte a `81b0c28`) |
 | Camada adaptadora campanha→batalha (Etapa 3: encontro -> cenário tático) | **Testada** (30 testes novos, incluindo mutação). **Revisada e commitada em `81b0c28`.** Somente leitura: não inicia batalha nem altera a campanha |
-| Integração campanha↔batalha (registro de batalhas, bloqueios, interface, aplicação do resultado) | **Plano aprovado (decisões D1–D8, abaixo); Etapas 1, 2 e 3 feitas; Etapas 4 a 6 NÃO implementadas.** Conquista/retirada do perdedor: fora de escopo |
+| **Registro e ciclo de vida das batalhas (Etapa 4):** `GameState.battles`, `BattleLifecycle` (registrar, cancelar, transições), bloqueio dos exércitos participantes, bloqueio do turno | **Testada** (25 testes novos, mutação; revisão técnica da Etapa 4 corrigiu a validação do registro). **Aguarda revisão; não commitada.** Sem interface; não aplica resultados |
+| Integração campanha↔batalha (registro de batalhas, bloqueios, interface, aplicação do resultado) | **Plano aprovado (decisões D1–D8, abaixo); Etapas 1, 2, 3 e 4 feitas; Etapas 5 e 6 NÃO implementadas.** Conquista/retirada do perdedor: fora de escopo |
 | IA estratégica, diplomacia, guerra | Planejadas |
 | Conteúdo histórico, eventos, mais províncias | Planejados |
 | Salvar/carregar, polimento, áudio | Planejados |
@@ -61,7 +62,8 @@ Comando (saída capturada, código de saída verificado):
 "E:/Guerra Total - Brazil/Godot_v4.7.2-stable/Godot_v4.7.2-stable_win64_console.exe" --headless --path "E:/Guerra Total - Brazil" --script res://tests/run_tests.gd
 ```
 
-- **333 testes, 7485 asserções, 0 falhas**, código de saída 0, saída de erro vazia. Comparação com a referência anterior (327 testes, 7372 asserções, 0 falhas, confirmada por nova execução antes de começar a revisão): +6 testes e +113 asserções legítimos da revisão das Etapas 2 e 3 (ver "Revisão técnica das Etapas 2 e 3" abaixo). (Histórico: 265/6257 antes da retirada; +14 dela; +18 da API de cenários; +30 da camada adaptadora.)
+- **358 testes, 7936 asserções, 0 falhas**, código de saída 0, saída de erro vazia. Comparação com a referência (333 testes, 7485 asserções, 0 falhas, confirmada por nova execução antes de começar a Etapa 4): os 333 continuam passando; somam-se 25 testes novos (`test_battle_lifecycle`; 2 vieram da revisão técnica) e 388 asserções (387 deles + 1 do teste que varre `src/` à procura de caminhos absolutos, que agora também lê `battle_lifecycle.gd`; confirmado comparando as asserções por teste entre o commit anterior e a árvore atual: a única diferença nos testes antigos foi essa).
+- Mutação (Etapa 4): sem o bloqueio no movimento, sem o bloqueio do turno, sem a revalidação do pedido, com recrutas entrando em exército bloqueado, e com transições inválidas aceitas, as 5 mutações foram detectadas (falhas nos testes correspondentes); restauradas, 0 falhas.
 - Mutação (Etapa 3): com a semente constante, o efetivo trocado pelo máximo e a colisão de ids ignorada, 3 funções de teste falham; restauradas, 0 falhas. (A mutação "limite ignorado" gera erro de índice em tempo de execução; ANTES da revisão o executor a deixava passar com código 0; agora ela é reportada como FALHA, código 1.) Com a validação desligada em `setup_from_scenario` (Etapa 2), 9 funções falham; com o código antigo da retirada, 6.
 - Testes da batalha em `tests/` (inclui `test_battle_retreat`, 14, `test_battle_scenario`, 18, e `test_battle_integration`, 30, da camada adaptadora): `test_hex` (9), `test_battle_map` (dados, mapa, caminhos), `test_battle_turns` (movimento, seleção, turnos), `test_battle_combat` (ataques, terreno, tipos, moral), `test_battle_victory` (retirada, vitória, reinício), `test_battle_ai` (IA, controlador), `test_battle_ui` (interface e integração com a campanha). Base compartilhada: `tests/battle_case.gd` (não começa com `test_`, então o executor não a roda como teste).
 - A cena principal e a cena da batalha executam sem erros em modo headless (`--quit-after`, sem stderr).
@@ -93,7 +95,7 @@ Comando (saída capturada, código de saída verificado):
 
 ## Limitações e pendências conhecidas
 
-- **Push pendente dos commits posteriores a `8c4e6ce`** (`git -c http.sslBackend=schannel push origin main`, feito pelo usuário): o assistente não tem credenciais do GitHub (um push anterior falhou com "Invalid username or token"). Nada mais está pendente de commit.
+- **Etapa 4 pendente de revisão e commit.** O assistente não tem credenciais do GitHub (um push anterior falhou com "Invalid username or token"): o push é do usuário.
 - Validação manual do usuário ainda não registrada para exércitos e batalha.
 - Batalha: sem integração com a campanha (nenhum exército real entra em batalha; nada volta para a campanha); a rotina do inimigo é básica; o jogador sempre começa; sem animações, sons, flanqueamento, ordens de formação nem cerco; mapa e cenário únicos (de teste); equilíbrio não ajustado; a artilharia pode ficar sem alvo por ter alcance mínimo 2.
 - Campanha: sem salvar/carregar, sem IA estratégica (outros países não agem), sem seleção de nação (França fixa), sem desfazer/cancelar ordens; encontros só surgem com um estrangeiro já em território próprio; generais só informativos; painel lateral apertado com dois painéis abertos.
@@ -101,8 +103,9 @@ Comando (saída capturada, código de saída verificado):
 
 ## Próximos passos sugeridos (a decidir pelo usuário)
 
-1. O usuário revisar o estado commitado (Etapas 2 e 3 e revisão) e publicar os commits pendentes (push).
-2. Só então a **Etapa 4** (plano aprovado, com as decisões D1–D8 abaixo; as Etapas 2 e 3 já existem; a camada `src/integration/` já tem `BattleRequest` e `BattleScenarioBuilder`): registro `GameState.battles`, bloqueio de exércitos e do turno, aplicação do resultado. Descrição original das etapas: camada `src/integration/` (`battle_request`, `battle_scenario_builder`, `data/battle/campaign_mapping.json`); Etapa 4 registro `GameState.battles` + aplicação transacional e idempotente do resultado; Etapa 5 botão "Iniciar batalha" e fluxo de interface; Etapa 6 testes e docs. Resumo do objetivo:
+1. O usuário revisar a Etapa 4 e autorizar o commit (depois publicar).
+2. Só então a **Etapa 5** (botão/fluxo de interface para iniciar a batalha registrada, jogar a cena tática com o cenário guardado em `GameState.battles[id]["scenario"]` e cancelar) e a **Etapa 6** (aplicar o resultado tático: baixas/moral por `source_id`, remover destruídas, dissolver exércitos vazios, resolver o encontro, usando `BattleLifecycle.check_can_apply` e `transition(..., "applied")`). Texto original do plano para a Etapa 4, já feita:
+   **Etapa 4** (plano aprovado, com as decisões D1–D8 abaixo; as Etapas 2 e 3 já existem; a camada `src/integration/` já tem `BattleRequest` e `BattleScenarioBuilder`): registro `GameState.battles`, bloqueio de exércitos e do turno, aplicação do resultado. Descrição original das etapas: camada `src/integration/` (`battle_request`, `battle_scenario_builder`, `data/battle/campaign_mapping.json`); Etapa 4 registro `GameState.battles` + aplicação transacional e idempotente do resultado; Etapa 5 botão "Iniciar batalha" e fluxo de interface; Etapa 6 testes e docs. Resumo do objetivo:
    **integração campanha↔batalha** (Fase 3 do `GAME_DESIGN.md`): a partir de um encontro, montar o cenário (terreno da província, exércitos), jogar a batalha (ou resolver automaticamente) e aplicar o `BattleResult` na campanha (baixas por `source_id`, destruição, controle da província). Antes de implementar, apresentar plano e critérios, como nas etapas anteriores.
 
 ### Revisão técnica das Etapas 2 e 3 (resultado)

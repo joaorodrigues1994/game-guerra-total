@@ -12,6 +12,7 @@ extends RefCounted
 ##   units: {id da unidade -> {type, category, owner, strength, morale}}   (valores ANTES da batalha)
 ##
 ## Regras (D1): um encontro pendente é o gatilho; só batalhas com exatamente 2 países, um deles o do jogador.
+## Um encontro que já tem batalha ativa, ou exército que já participa de uma batalha ativa, é recusado.
 
 
 static func find_encounter(state: RefCounted, encounter_id: int) -> Dictionary:
@@ -27,6 +28,9 @@ static func build(registry: RefCounted, state: RefCounted, encounter_id: int) ->
 		return _result({}, PackedStringArray(["Encontro #%d inexistente ou já resolvido." % encounter_id]))
 
 	var errors := PackedStringArray()
+	var active_battle: int = state.battle_of_encounter(encounter_id)
+	if active_battle != 0:
+		errors.append("O encontro #%d já tem a batalha ativa #%d." % [encounter_id, active_battle])
 	var province_id := str(encounter.get("province", ""))
 	if not registry.provinces.has(province_id) or not state.provinces.has(province_id):
 		errors.append("Província do encontro inexistente: '%s'." % province_id)
@@ -114,6 +118,9 @@ static func _collect_armies(registry: RefCounted, state: RefCounted, encounter: 
 		if army["units"].is_empty():
 			errors.append("%s não tem unidades." % label)
 			continue
+		var locked_by: int = state.battle_of_army(army_id)
+		if locked_by != 0:
+			errors.append("%s já está na batalha ativa #%d." % [label, locked_by])
 		var side: String = side_of[army["owner"]]
 		request["sides"][side]["armies"].append(army_id)
 		var unit_ids: Array[int] = []
