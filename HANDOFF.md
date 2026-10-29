@@ -7,7 +7,7 @@ Instruções permanentes: `CLAUDE.md`. Desenho do jogo: `GAME_DESIGN.md`. Decis�
 
 - Jogo de estratégia histórica por turnos (Guerras Napoleônicas), inspirado em EU4, Civilization e Total War: Warhammer. Interface em português do Brasil.
 - Raiz: `E:\Guerra Total - Brazil` · Godot **4.7.2** (executável na própria pasta, ignorado pelo Git) · GDScript · Windows.
-- Git: branch `main`. O remoto `origin` (`https://github.com/joaorodrigues1994/game-guerra-total.git`) está **configurado, mas nada foi enviado**: o push falhou por falta de autenticação (o usuário precisa autenticar; ver "Pendências"). Fim de linha: o Git avisa "LF will be replaced by CRLF" (normal no Windows; não há `.gitattributes`).
+- Git: branch `main`. O remoto `origin` (`https://github.com/joaorodrigues1994/game-guerra-total.git`) existe e `origin/main` está em `8c4e6ce` (Docs: HANDOFF.md e CLAUDE.md): o usuário publicou até esse commit; **os commits posteriores (`1a5e409` em diante) ainda NÃO foram enviados**. O assistente não consegue autenticar no GitHub: o push é feito pelo usuário (ou autorizado por ele depois de autenticar; o erro de certificado SSL se contorna só no comando com `-c http.sslBackend=schannel`). Fim de linha: o Git avisa "LF will be replaced by CRLF" (normal no Windows; não há `.gitattributes`).
 
 ## Histórico de commits
 
@@ -24,7 +24,7 @@ Instruções permanentes: `CLAUDE.md`. Desenho do jogo: `GAME_DESIGN.md`. Decis�
 | `81b0c28` | Integração: adaptador campanha → batalha e mapeamentos (Etapa 3) |
 | (commit seguinte) | Revisão técnica das Etapas 2 e 3: efetivo/moral sem perda silenciosa, `source_id` repetido, executor de testes com detecção de erros de execução, decisões aprovadas |
 
-**Estado do Git:** as Etapas 1, 2 e 3 e a revisão técnica estão commitadas (a árvore de trabalho deve estar limpa). **Nada foi enviado ao remoto** (push pendente de autenticação). A Etapa 4 NÃO foi iniciada.
+**Estado do Git:** as Etapas 1, 2 e 3 e a revisão técnica estão commitadas (a árvore de trabalho deve estar limpa). O `main` local está 5 commits à frente de `origin/main` (`8c4e6ce`), conferido com `git branch -vv`. A Etapa 4 NÃO foi iniciada.
 
 ## Estado por funcionalidade
 
@@ -93,7 +93,7 @@ Comando (saída capturada, código de saída verificado):
 
 ## Limitações e pendências conhecidas
 
-- **Commit da batalha pendente de autorização.** **Push pendente:** `git push -u origin main` falhou com "Invalid username or token" (e antes com erro de certificado SSL: foi contornado só no comando com `-c http.sslBackend=schannel`, sem mudar a configuração). O usuário precisa autenticar (login do Git Credential Manager ou token com permissão `repo`) e rodar o push, ou autorizar a repetição depois de autenticar.
+- **Push pendente dos commits posteriores a `8c4e6ce`** (`git -c http.sslBackend=schannel push origin main`, feito pelo usuário): o assistente não tem credenciais do GitHub (um push anterior falhou com "Invalid username or token"). Nada mais está pendente de commit.
 - Validação manual do usuário ainda não registrada para exércitos e batalha.
 - Batalha: sem integração com a campanha (nenhum exército real entra em batalha; nada volta para a campanha); a rotina do inimigo é básica; o jogador sempre começa; sem animações, sons, flanqueamento, ordens de formação nem cerco; mapa e cenário únicos (de teste); equilíbrio não ajustado; a artilharia pode ficar sem alvo por ter alcance mínimo 2.
 - Campanha: sem salvar/carregar, sem IA estratégica (outros países não agem), sem seleção de nação (França fixa), sem desfazer/cancelar ordens; encontros só surgem com um estrangeiro já em território próprio; generais só informativos; painel lateral apertado com dois painéis abertos.
@@ -101,7 +101,7 @@ Comando (saída capturada, código de saída verificado):
 
 ## Próximos passos sugeridos (a decidir pelo usuário)
 
-1. O usuário revisar as Etapas 2 e 3 e autorizar o commit; resolver a autenticação do push.
+1. O usuário revisar o estado commitado (Etapas 2 e 3 e revisão) e publicar os commits pendentes (push).
 2. Só então a **Etapa 4** (plano aprovado, com as decisões D1–D8 abaixo; as Etapas 2 e 3 já existem; a camada `src/integration/` já tem `BattleRequest` e `BattleScenarioBuilder`): registro `GameState.battles`, bloqueio de exércitos e do turno, aplicação do resultado. Descrição original das etapas: camada `src/integration/` (`battle_request`, `battle_scenario_builder`, `data/battle/campaign_mapping.json`); Etapa 4 registro `GameState.battles` + aplicação transacional e idempotente do resultado; Etapa 5 botão "Iniciar batalha" e fluxo de interface; Etapa 6 testes e docs. Resumo do objetivo:
    **integração campanha↔batalha** (Fase 3 do `GAME_DESIGN.md`): a partir de um encontro, montar o cenário (terreno da província, exércitos), jogar a batalha (ou resolver automaticamente) e aplicar o `BattleResult` na campanha (baixas por `source_id`, destruição, controle da província). Antes de implementar, apresentar plano e critérios, como nas etapas anteriores.
 
