@@ -101,7 +101,8 @@ static func _retreat(state: RefCounted, unit_id: int) -> void:
 	if state.map.is_edge(unit["pos"], edge):
 		_flee(state, unit)
 		return
-	var reach := Pathfinding.reachable(state.map, unit["pos"], 100000, Movement.blocked_hexes(state, unit_id))
+	# Em fuga, a unidade atravessa ALIADAS; só inimigos (e água) bloqueiam o caminho.
+	var reach := Pathfinding.reachable(state.map, unit["pos"], 100000, _enemy_hexes(state, unit["side"]))
 	var goal := Vector2i(-1, -1)
 	var best_cost := -1
 	for hex in state.map.edge_hexes(edge):
@@ -113,18 +114,30 @@ static func _retreat(state: RefCounted, unit_id: int) -> void:
 		return
 	var path := Pathfinding.path_to(reach["prev"], unit["pos"], goal)
 	var spent := 0
-	var destination: Vector2i = unit["pos"]
+	var destination: Vector2i = unit["pos"]  # último hexágono LIVRE alcançável (nunca para sobre outra unidade)
 	for i in range(1, path.size()):
 		var step_cost: int = state.map.move_cost(path[i])
 		if spent + step_cost > unit["move_range"]:
 			break
 		spent += step_cost
-		destination = path[i]
+		if path[i] == goal:
+			_flee(state, unit)  # chegou à borda (mesmo ocupada por aliada: ela sai do campo, não para ali)
+			return
+		if state.unit_at(path[i]) == 0:
+			destination = path[i]
 	if destination != unit["pos"]:
 		unit["pos"] = destination
 		state.add_log("%s recua em desordem." % unit["name"])
-	if state.map.is_edge(unit["pos"], edge):
-		_flee(state, unit)
+	else:
+		state.add_log("%s não encontra espaço livre para recuar." % unit["name"])
+
+
+## Hexágonos ocupados por unidades em campo de OUTRO lado (os únicos que barram uma retirada).
+static func _enemy_hexes(state: RefCounted, side: String) -> Dictionary:
+	var blocked := {}
+	for id in state.live_units(state.opponent_of(side)):
+		blocked[state.units[id]["pos"]] = true
+	return blocked
 
 
 static func _flee(state: RefCounted, unit: Dictionary) -> void:

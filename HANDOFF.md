@@ -18,8 +18,9 @@ Instruções permanentes: `CLAUDE.md`. Desenho do jogo: `GAME_DESIGN.md`. Decis�
 | `fe02b57` | Campanha funcional — economia, construções, recrutamento, turnos |
 | `6fa235f` | Exércitos, generais e movimentação estratégica |
 | `8c4e6ce` | Docs: HANDOFF.md e CLAUDE.md |
+| `1a5e409` | Batalha tática: primeira batalha jogável (independente da campanha) |
 
-**A batalha tática (abaixo) está implementada e testada, mas AINDA NÃO FOI COMMITADA** (aguarda a autorização do usuário).
+**Alterações atuais NÃO commitadas (Etapa 1 da integração campanha↔batalha):** correção do defeito de retirada bloqueada por aliadas (`src/battle/battle_turns.gd`), testes novos (`tests/test_battle_retreat.gd`, 14 testes) e uma pequena robustez no executor de testes (`tests/run_tests.gd`). Aguardam a validação manual do usuário e a autorização de commit.
 
 ## Estado por funcionalidade
 
@@ -31,8 +32,9 @@ Legenda: **Validada** = testes automatizados passando *e* o usuário confirmou m
 | Mapa de campanha (polígonos, fronteiras, nomes, capitais, seleção) | **Validada** |
 | Economia, construções, recrutamento de infantaria | **Validada** |
 | Exércitos, generais, movimentação, encontros, marcadores no mapa | **Testada** (validação manual do usuário não registrada; o commit foi autorizado) |
-| **Batalha tática** (hexágonos, terrenos, turnos, movimento, ataques, moral, retirada, vitória, IA básica, reinício, interface) | **Testada** (265 testes + capturas reais). **Não validada manualmente; não commitada** |
-| Integração campanha↔batalha (iniciar a batalha a partir de um encontro, aplicar baixas, conquista) | Planejada — só o contrato existe (ver abaixo) |
+| **Batalha tática** (hexágonos, terrenos, turnos, movimento, ataques, moral, retirada, vitória, IA básica, reinício, interface) | **Validada** (o usuário a testou manualmente e a considerou aceitável); commitada em `1a5e409` |
+| Correção da retirada bloqueada por aliadas (Etapa 1 da integração) | **Testada** (14 testes novos; os novos falham no código antigo). **Aguarda validação manual; não commitada** |
+| Integração campanha↔batalha (iniciar a batalha a partir de um encontro, aplicar baixas) | **Plano aprovado (decisões D1–D8, abaixo); Etapas 2 a 6 NÃO implementadas.** Só o contrato existe. Conquista/retirada do perdedor: fora de escopo |
 | IA estratégica, diplomacia, guerra | Planejadas |
 | Conteúdo histórico, eventos, mais províncias | Planejados |
 | Salvar/carregar, polimento, áudio | Planejados |
@@ -52,12 +54,13 @@ Comando (saída capturada, código de saída verificado):
 "E:/Guerra Total - Brazil/Godot_v4.7.2-stable/Godot_v4.7.2-stable_win64_console.exe" --headless --path "E:/Guerra Total - Brazil" --script res://tests/run_tests.gd
 ```
 
-- **265 testes, 6257 asserções, 0 falhas**, código de saída 0, saída de erro vazia. (Antes da batalha: 156 testes, 1065 asserções, 0 falhas; esses continuam passando sem alteração de conteúdo.)
-- Testes novos da batalha em `tests/`: `test_hex` (9), `test_battle_map` (dados, mapa, caminhos), `test_battle_turns` (movimento, seleção, turnos), `test_battle_combat` (ataques, terreno, tipos, moral), `test_battle_victory` (retirada, vitória, reinício), `test_battle_ai` (IA, controlador), `test_battle_ui` (interface e integração com a campanha). Base compartilhada: `tests/battle_case.gd` (não começa com `test_`, então o executor não a roda como teste).
+- **279 testes, 6394 asserções, 0 falhas**, código de saída 0, saída de erro vazia. Comparação com a linha de base anterior (265 testes, 6257 asserções, 0 falhas): os 265 testes anteriores continuam passando sem alteração de conteúdo; somam-se 14 testes e 137 asserções novos (`test_battle_retreat`).
+- Com o código ANTIGO de `battle_turns.gd` (antes da correção), a mesma suíte dá 6 falhas, todas nos testes novos da retirada: eles de fato detectam o defeito.
+- Testes da batalha em `tests/` (inclui `test_battle_retreat`, 14, da correção da retirada): `test_hex` (9), `test_battle_map` (dados, mapa, caminhos), `test_battle_turns` (movimento, seleção, turnos), `test_battle_combat` (ataques, terreno, tipos, moral), `test_battle_victory` (retirada, vitória, reinício), `test_battle_ai` (IA, controlador), `test_battle_ui` (interface e integração com a campanha). Base compartilhada: `tests/battle_case.gd` (não começa com `test_`, então o executor não a roda como teste).
 - A cena principal e a cena da batalha executam sem erros em modo headless (`--quit-after`, sem stderr).
 - Foi feita "mutação" manual (quebrar regras de propósito: terreno ignorado, hexágono ocupado aceito, retirada podendo atacar, ações não restauradas, moral inerte): os testes falharam (10 falhas) e voltaram a 0 ao restaurar.
 - Simulações IA contra IA (8 sementes): todas terminam em 9–10 turnos; o lado que joga primeiro (jogador) venceu todas — equilíbrio do cenário de teste não foi ajustado.
-- **Limitação do executor de testes:** um erro de script em tempo de execução não derruba o executor (só testes sem nenhuma asserção contam como falha). Sempre confira também se o **stderr está vazio**.
+- **Limitação do executor de testes:** um erro de script em tempo de execução não derruba o executor (só testes sem nenhuma asserção contam como falha). Sempre confira também se o **stderr está vazio**. Um arquivo de teste com erro de sintaxe agora vira uma falha explícita (antes o executor ficava pendurado sem terminar); mesmo assim rode a suíte com limite de tempo (`timeout 240 ...`).
 
 ## Validação visual
 
@@ -90,9 +93,18 @@ Comando (saída capturada, código de saída verificado):
 
 ## Próximos passos sugeridos (a decidir pelo usuário)
 
-1. O usuário validar manualmente a batalha e os exércitos (roteiros abaixo / na resposta da etapa) e apontar ajustes.
-2. Autorizar o commit da batalha e resolver a autenticação do push.
-3. Só então: **integração campanha↔batalha** (Fase 3 do `GAME_DESIGN.md`): a partir de um encontro, montar o cenário (terreno da província, exércitos), jogar a batalha (ou resolver automaticamente) e aplicar o `BattleResult` na campanha (baixas por `source_id`, destruição, controle da província). Antes de implementar, apresentar plano e critérios, como nas etapas anteriores.
+1. O usuário validar manualmente a correção da retirada (roteiro abaixo) e os exércitos da campanha.
+2. Autorizar o commit da Etapa 1 e resolver a autenticação do push.
+3. Só então a **Etapa 2** da integração (plano aprovado, com as decisões D1–D8 abaixo): cenário a partir de dados (`setup_from_scenario`, `source_id`); Etapa 3 camada `src/integration/` (`battle_request`, `battle_scenario_builder`, `data/battle/campaign_mapping.json`); Etapa 4 registro `GameState.battles` + aplicação transacional e idempotente do resultado; Etapa 5 botão "Iniciar batalha" e fluxo de interface; Etapa 6 testes e docs. Resumo do objetivo:
+   **integração campanha↔batalha** (Fase 3 do `GAME_DESIGN.md`): a partir de um encontro, montar o cenário (terreno da província, exércitos), jogar a batalha (ou resolver automaticamente) e aplicar o `BattleResult` na campanha (baixas por `source_id`, destruição, controle da província). Antes de implementar, apresentar plano e critérios, como nas etapas anteriores.
+
+### Decisões aprovadas para a integração (D1–D8)
+
+- D1 encontro pendente = gatilho; só 2 países, um deles o do jogador; outros casos recusados. D2 mapa gerado de forma determinística (semente = id do encontro) a partir do terreno da província, via `data/battle/campaign_mapping.json` (montanha → colina; vale fluvial → planície com rio e vaus; sem fortificação). D3 jogador a oeste, inimigo a leste, nas 2 primeiras colunas; limite de 18 unidades por lado. D4 tipo por `campaign_category`; efetivo atual limitado ao máximo; moral da instância sem reescalar; ataque/defesa/alcance dos dados táticos; sem efeito de experiência/general. D5 sobreviventes devolvem efetivo e moral; destruídas são removidas (exército vazio é desfeito, general liberado); fugidas continuam no exército. D6 sem conquista nem retirada forçada; o encontro é resolvido e removido. D7 voltar antes do fim cancela sem efeito. D8 o turno da campanha fica bloqueado durante batalha ativa. Um botão "Criar encontro de teste" rotulado como ferramenta de teste foi proposto para a validação manual.
+
+### Como validar a correção da retirada manualmente
+
+Na batalha de teste, deixar uma unidade ficar em retirada (atacá-la repetidamente até a moral cair a 25 ou menos) com aliadas coladas a ela: no início do turno do lado dela, ela deve atravessar as aliadas e seguir para a borda (ou parar no último hexágono livre), sem a mensagem "cercada" quando houver caminho. Inimigos e água continuam barrando.
 
 ### Como validar a batalha manualmente (resumo)
 
@@ -114,11 +126,11 @@ Comando (saída capturada, código de saída verificado):
 
 ```
 cd "E:/Guerra Total - Brazil"
-git status                      # deve mostrar a batalha tática como alteração não commitada, se ainda não foi commitada
-git log --oneline               # topo: 8c4e6ce (até a autorização do commit da batalha)
+git status                      # alterações da Etapa 1 (retirada) podem estar não commitadas
+git log --oneline               # topo: 1a5e409
 ```
 
-Rodar os testes: comando acima (esperado: 265 testes, 0 falhas, stderr vazio).
+Rodar os testes: comando acima (esperado: 279 testes, 0 falhas, stderr vazio).
 
 - Abrir no editor: `"E:/Guerra Total - Brazil/Godot_v4.7.2-stable/Godot_v4.7.2-stable_win64.exe" --path "E:/Guerra Total - Brazil" --editor`
 - Jogar a campanha: o mesmo executável com `--path "E:/Guerra Total - Brazil"` (sem `--editor`).

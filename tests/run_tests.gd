@@ -16,8 +16,10 @@ func _run() -> void:
 
 	for file in _test_files():
 		var script: Script = load("res://tests/%s" % file)
-		if script == null:
-			print("FALHA  %s: não foi possível carregar o script" % file)
+		# Um arquivo com erro de sintaxe carrega como Script não instanciável: sem esta checagem o
+		# executor falhava no meio e o processo ficava pendurado em vez de terminar.
+		if script == null or not script.can_instantiate():
+			print("FALHA  %s: não foi possível carregar o script (erro de sintaxe?)" % file)
 			failed += 1
 			continue
 		var probe: RefCounted = script.new()
