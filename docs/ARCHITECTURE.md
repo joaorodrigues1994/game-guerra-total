@@ -21,6 +21,7 @@ Documento vivo. Estado atual: **Fase 0 (Fundação)**.
 | `units/` | `ArmyActions` (exércitos, generais, movimentação, encontros) | exércitos |
 | `provinces/` | `MapGeometry` (geometria pura), `ProvinceMap` (polígonos, teste de clique, fronteiras) | Fase 1 |
 | `battle/` | batalha tática independente: `Hex`, `BattleRegistry`, `BattleMap`, `BattleState`, `BattlePathfinding`, `BattleMovement`, `BattleCombat`, `BattleMorale`, `BattleTurns`, `BattleAI`, `BattleController` | batalha tática |
+| `integration/` | camada adaptadora campanha -> batalha: `BattleRequest`, `BattleScenarioBuilder` (somente leitura; depende dos dois módulos) | integração (Etapa 3) |
 | `ui/` | `MapView` (mapa e marcadores), `ProvincePanel`, `ArmyPanel`, `TopBar`, `StatusBar`, `CampaignScreen` (leem o estado e chamam o controlador); `ui/battle/`: `BattleScreen`, `BattleView`, `BattlePanel`, `BattleLogPanel`, `BattleResultPanel` | Fase 1/campanha/exércitos/batalha |
 
 ## Dados (`data/`)
@@ -213,6 +214,44 @@ Um lado está **quebrado** quando não tem unidade **efetiva** (em campo e fora 
 O que existe: `BattleState.setup(registry, scenario)` monta tudo a partir de **dados**; `BattleState.add_unit(type, nome, lado, pos, {strength, morale, source_id})` aceita efetivo, moral e o id da unidade de campanha de origem; `BattleState.result_summary()` devolve o `BattleResult`: `{scenario_id, winner, reason, text, turns, units: {lado: [{unit_id, source_id, name, type, strength, max_strength, morale, status}]}}`. O contrato de encontro da campanha (`GameState.encounters`: província, exércitos e países) é o gatilho natural.
 
 O que falta (próxima etapa): (1) montar um cenário a partir de um encontro: mapa a partir do terreno da província (`terrains` da campanha -> terrenos táticos), unidades de cada exército (`campaign_category` liga o tipo da campanha ao tipo tático; efetivo/moral/experiência das instâncias; `source_id` = id da instância); general como modificador; (2) aplicar o `BattleResult` à campanha **depois** da batalha (baixas por `source_id`, destruídas, fugidas, controle da província); a batalha nunca altera o `GameState` diretamente; (3) resolução automática para IA contra IA reutilizando as mesmas regras (`BattleAI` já joga os dois lados em testes).
+
+### Camada adaptadora `src/integration/` (Etapa 3; sem efeito na campanha)
+
+Converte um **encontro pendente** (`GameState.encounters`) em um **cenário tático** (dicionário aceito por `BattleState.setup_from_scenario`). É **somente leitura**: não inicia batalha, não consome o encontro, não trava exércitos e não altera força, moral, províncias nem turnos (testado comparando `GameState.to_dict()` antes e depois). Fica fora de `battle/` e `campaign/` porque depende dos dois.
+
+```gdscript
+var mapping := BattleScenarioBuilder.load_mapping()["mapping"]            # data/battle/campaign_mapping.json
+var r := BattleScenarioBuilder.build(registry, state, battle_registry, mapping, encounter_id)
+# r = {ok, scenario, request, conversion, errors: PackedStringArray, message: String}   (mesma convenção {ok, message}; message = erros unidos)
+if r["ok"]:
+    var battle := BattleState.new()
+    battle.setup_from_scenario(battle_registry, r["scenario"])
+```
+
+- **`BattleRequest.build(registry, state, encounter_id)`** valida e devolve o pedido: encontro e província existentes; **exatamente 2 países** (D1), existentes, um deles o do jogador; exércitos existentes, na província do encontro, de países participantes, sem listar o mesmo exército duas vezes nem constar de outro encontro pendente; exércitos com unidades; unidades existentes, do dono do exército, de tipo conhecido, **ids >= 1, sem repetição entre exércitos e sem colisão no estado** (mais de uma instância com o mesmo id é erro). O `request` guarda o instantâneo para etapas futuras: `sides` (país, exércitos e unidades ordenados), `unit_army` (unidade -> exército de origem) e `units` (tipo, categoria, dono, efetivo e moral ANTES da batalha).
+- **`BattleScenarioBuilder.build(...)`** valida o mapeamento, o pedido e as categorias, converte as unidades, gera o mapa, posiciona, monta o cenário e o passa pelo `BattleRegistry.validate_scenario` existente (erros viram "Cenário gerado inválido: ..."). Nenhuma unidade é descartada em silêncio: qualquer problema devolve `ok = false` com todos os motivos e **nenhum cenário parcial**.
+- Desvio do plano: o mapeamento de **tipos** não foi duplicado em `campaign_mapping.json`; usa-se o `campaign_category` que já existe em `unit_types.json` (validado: cada categoria de campanha precisa ter exatamente um tipo tático). O JSON contém o mapeamento de **terrenos**, o tamanho do mapa e a implantação.
+
+**Conversões e decisões**
+
+| Dado | Regra |
+|---|---|
+| Tipo | categoria da unidade de campanha (`units.json` `category`) -> tipo tático com o mesmo `campaign_category`: infantry -> infantaria, cavalry -> cavalaria, artillery -> artilharia. Categoria sem tipo (ou ambígua) é erro |
+| Efetivo | efetivo **atual** da instância, limitado a `max_strength` do tipo tático; `< 1` é erro (destruída não entra). `conversion[]` informa `strength_clamped` |
+| Moral | moral **atual** da instância, **sem reescalar** (60–70 permanece 60–70 na escala 0–100), limitada a `max_morale`; `< 1` é erro |
+| Ataque, defesa, alcance, mobilidade | dos dados táticos (a batalha é a autoridade); os valores de campanha não são usados. Experiência e generais: sem efeito |
+| `source_id` | id da instância de unidade da campanha. É suficiente para distinguir as participantes porque o `GameState` o atribui por `next_unit_id` (único); o construtor **verifica** a unicidade (repetição entre exércitos, colisão de instâncias, id < 1). O exército de origem não vai no cenário: está em `request.unit_army` |
+| Nome | `"<nome da unidade> #<id>"` |
+| Semente | `seed_salt + id do encontro` (cenário e mapa): mesmo encontro e dados = mesmo cenário |
+| Limite | `columns x altura` unidades por lado (2 x 9 = 18); acima disso erro, sem descartar |
+
+**Terreno estratégico -> mapa tático** (`data/battle/campaign_mapping.json`, validado contra os dois registros; terreno sem entrada é erro, nunca vira planície): `plains` -> planície com 10% de floresta e 6% de colinas; `hills` -> colinas (12% planície, 5% floresta); `mountains` -> colinas (8% floresta); `forest` -> floresta (12% planície, 4% colinas); `river_valley` -> planície (5% floresta) com **rio** na coluna 6 e **vaus** nas linhas 3 e 6. Cada hexágono consome um sorteio, linha a linha, então o resultado é reproduzível. O rio nunca invade as zonas de implantação (validado).
+
+**Implantação:** jogador a oeste, adversário a leste, nas 2 primeiras colunas de cada borda (`deployment_slots`: coluna mais interna primeiro; em cada coluna do centro para as pontas). Unidades ordenadas por **id do exército e id da unidade** (nunca pela ordem de iteração de dicionários). Os cenários de teste existentes não mudam.
+
+**Exemplo** (encontro em Alsácia, `river_valley`): infantaria francesa #8 (efetivo 320, moral 55) -> `{"side":"player","type":"infantry","at":[1,4],"source_id":8,"strength":320,"morale":55}`; cavalaria #9 (200/65) -> `at [1,3]`; infantaria austríaca #6 (500/70) -> `{"side":"enemy","at":[10,4],"source_id":6}`; artilharia #7 (80/60) -> `at [10,3]`; semente 1001; mapa com rio na coluna 6.
+
+**Fora de escopo (Etapas 4 a 6):** registro de batalhas em `GameState`, bloqueio de exércitos e do turno, botão/fluxo na interface, aplicação de baixas e sobreviventes, dissolução de exércitos vazios, cancelamento, conquista.
 
 ## Decisões em aberto
 

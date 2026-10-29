@@ -1,0 +1,28 @@
+{
+  "seed_salt": 1000,
+  "map": { "width": 12, "height": 9 },
+  "deployment": { "columns": 2, "player_edge": "west", "enemy_edge": "east" },
+  "terrains": {
+    "plains": {
+      "base": "plains",
+      "features": [ { "terrain": "forest", "chance": 0.10 }, { "terrain": "hills", "chance": 0.06 } ]
+    },
+    "hills": {
+      "base": "hills",
+      "features": [ { "terrain": "plains", "chance": 0.12 }, { "terrain": "forest", "chance": 0.05 } ]
+    },
+    "mountains": {
+      "base": "hills",
+      "features": [ { "terrain": "forest", "chance": 0.08 } ]
+    },
+    "forest": {
+      "base": "forest",
+      "features": [ { "terrain": "plains", "chance": 0.12 }, { "terrain": "hills", "chance": 0.04 } ]
+    },
+    "river_valley": {
+      "base": "plains",
+      "features": [ { "terrain": "forest", "chance": 0.05 } ],
+      "river": { "column": 6, "terrain": "water", "ford_terrain": "plains", "fords": [3, 6] }
+    }
+  }
+}
