@@ -7,6 +7,11 @@ const CampaignActions := preload("res://src/campaign/campaign_actions.gd")
 const ArmyActions := preload("res://src/units/army_actions.gd")
 const EconomyCalculator := preload("res://src/economy/economy_calculator.gd")
 const TurnProcessor := preload("res://src/campaign/turn_processor.gd")
+const BattleFlow := preload("res://src/integration/battle_flow.gd")
+const BattleLifecycle := preload("res://src/integration/battle_lifecycle.gd")
+const BattleResolution := preload("res://src/integration/battle_resolution.gd")
+const EncounterRetreat := preload("res://src/integration/encounter_retreat.gd")
+const WarActions := preload("res://src/campaign/war_actions.gd")
 
 const MONTH_NAMES := [
 	"Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -21,6 +26,15 @@ signal state_changed
 signal turn_ended(report: Dictionary)
 ## Mensagem para o jogador (resultado de ação, motivo de rejeição, resumo do turno).
 signal message_posted(text: String, is_error: bool)
+## Uma batalha foi registrada e sua cena tática está pronta (BattleController já inicializado com o cenário
+## registrado). Quem abre a tela DEVE assumir o controlador; se não puder, cancela com cancel_battle.
+signal battle_started(battle_id: int, battle_controller: RefCounted)
+## O resultado tático de uma batalha foi APLICADO à campanha (batalha "applied"): linhas legíveis do que mudou.
+signal battle_resolved(battle_id: int, lines: PackedStringArray)
+## O resultado tático NÃO pôde ser registrado/aplicado: `message` é o texto completo para o jogador (motivo, que nada
+## foi alterado, que a batalha continua pendente e quais ações existem). A cena tática aberta (a campanha pode estar
+## oculta por baixo) mostra esse texto, porque o status bar da campanha não está visível durante a batalha.
+signal battle_application_failed(battle_id: int, message: String)
 
 var registry: RefCounted
 var state: RefCounted
@@ -134,12 +148,25 @@ func form_army(province_id: String, unit_id: int) -> Dictionary:
 	return _finish_action(result)
 
 
+## Mescla `source_id` no exército `target_id` (o selecionado passa a ser o resultante).
+func merge_armies(target_id: int, source_id: int) -> Dictionary:
+	var result := ArmyActions.merge_armies(registry, state, state.player_country_id, target_id, source_id)
+	if result["ok"] and selected_army_id == source_id:
+		select_army(target_id)
+	return _finish_action(result)
+
+
 func assign_general(army_id: int, general_id: String) -> Dictionary:
 	return _finish_action(ArmyActions.assign_general(registry, state, state.player_country_id, army_id, general_id))
 
 
 func unassign_general(army_id: int) -> Dictionary:
 	return _finish_action(ArmyActions.unassign_general(registry, state, state.player_country_id, army_id))
+
+
+## O país do jogador declara guerra a `target_id` (única ação diplomática; ver WarActions).
+func declare_war(target_id: String) -> Dictionary:
+	return _finish_action(WarActions.declare_war(registry, state, state.player_country_id, target_id))
 
 
 func end_turn() -> Dictionary:
@@ -151,6 +178,77 @@ func end_turn() -> Dictionary:
 	else:
 		message_posted.emit("Não foi possível encerrar o turno: %s" % " ".join(PackedStringArray(report["errors"])), true)
 	return report
+
+
+## Dados da batalha (BattleRegistry + mapeamento), carregados na primeira necessidade. Vazio até então.
+var battle_context: Dictionary = {}
+
+
+## Inicia a batalha do encontro (ver BattleFlow.start). Em caso de sucesso emite battle_started com o controlador
+## tático; em caso de recusa ou falha explica o motivo e não deixa batalha ativa nem bloqueio.
+func start_battle(encounter_id: int) -> Dictionary:
+	if battle_context.is_empty():
+		battle_context = BattleFlow.load_context()
+	var result := BattleFlow.start(registry, state, battle_context, encounter_id)
+	if not result["ok"]:
+		if not battle_context.get("ok", false):
+			battle_context = {}  # dados indisponíveis: tenta recarregar na próxima vez
+		message_posted.emit("Não foi possível iniciar a batalha: %s" % result["message"], true)
+		if result["battle_id"] != 0:
+			state_changed.emit()  # houve registro e cancelamento: a interface precisa reler o estado
+		return result
+	var battle_id: int = result["battle_id"]
+	var battle_controller: RefCounted = result["controller"]
+	battle_controller.battle_finished.connect(_on_battle_finished.bind(battle_id))
+	state_changed.emit()
+	message_posted.emit(result["message"], false)
+	battle_started.emit(battle_id, battle_controller)
+	return result
+
+
+## Cancela uma batalha ativa: libera os exércitos e o encontro volta a poder iniciar outra batalha.
+## O defensor de um encontro recua sem batalha (ver EncounterRetreat). Só o jogador, e só se for o defensor.
+func retreat_from_encounter(encounter_id: int) -> Dictionary:
+	return _finish_action(EncounterRetreat.retreat(registry, state, state.player_country_id, encounter_id))
+
+
+func cancel_battle(battle_id: int) -> Dictionary:
+	return _finish_action(BattleLifecycle.cancel(state, battle_id))
+
+
+## A cena tática terminou: guarda o resultado na batalha e o aplica à campanha, uma única vez (BattleFlow.finish).
+## Se o registro ou a aplicação falhar, nada é alterado na campanha: a batalha continua ativa (com o resultado
+## guardado, se houve registro) e o jogador pode tentar de novo (apply_battle_result) ou cancelar.
+func _on_battle_finished(summary: Dictionary, battle_id: int) -> void:
+	_after_application(battle_id, BattleFlow.finish(registry, state, battle_id, summary))
+
+
+## Tenta de novo aplicar o resultado tático já registrado (após uma falha). Recusa batalha já aplicada ou cancelada.
+func apply_battle_result(battle_id: int) -> Dictionary:
+	var result := BattleFlow.apply_result(registry, state, battle_id)
+	_after_application(battle_id, {"ok": result["ok"], "recorded": true, "applied": result["ok"], "report": result["report"],
+		"errors": result["errors"], "message": result["message"]})
+	return result
+
+
+func _after_application(battle_id: int, result: Dictionary) -> void:
+	if not result["ok"]:
+		var text: String
+		if result["recorded"]:
+			text = "O resultado da batalha #%d NÃO foi aplicado à campanha: %s Nada foi alterado e a batalha continua pendente (exércitos bloqueados, turno bloqueado). Use \"Aplicar resultado\" para tentar de novo ou \"Cancelar batalha\", no painel da província." % [battle_id, result["message"]]
+		else:
+			text = "O resultado da batalha #%d NÃO foi registrado: %s Nada foi alterado e a batalha continua pendente (exércitos bloqueados, turno bloqueado). Use \"Cancelar batalha\" no painel da província." % [battle_id, result["message"]]
+		message_posted.emit(text, true)
+		state_changed.emit()
+		battle_application_failed.emit(battle_id, text)
+		return
+	if selected_army_id != 0 and not state.armies.has(selected_army_id):
+		selected_army_id = 0  # o exército selecionado foi destruído pela batalha
+		army_selection_changed.emit(0)
+	var lines := BattleResolution.describe(registry, result["report"])
+	message_posted.emit(" ".join(lines), false)
+	state_changed.emit()
+	battle_resolved.emit(battle_id, lines)
 
 
 func _finish_action(result: Dictionary) -> Dictionary:
@@ -226,6 +324,8 @@ func province_view(province_id: String) -> Dictionary:
 		"armies": armies_view(province_id),
 		"garrison_units": _garrison_view(province_id) if owned_by_player else [],
 		"encounters": _encounter_lines(province_id),
+		"encounter_actions": _encounter_actions(province_id),
+		"diplomacy": _diplomacy_view(owner_id),
 		"neighbors": neighbors,
 		"owned_by_player": owned_by_player,
 		"build_options": build_options(province_id) if owned_by_player else [],
@@ -275,6 +375,56 @@ func _encounter_lines(province_id: String) -> Array[String]:
 	return lines
 
 
+## Relação do jogador com o país dono da província: {country_id, country_name, status ("own" | "peace" | "war"),
+## status_text, can_declare, declare_reason}. Própria província: status "own", sem ação.
+func _diplomacy_view(country_id: String) -> Dictionary:
+	var player: String = state.player_country_id
+	var name: String = registry.countries[country_id]["name"]
+	if country_id == player:
+		return {"country_id": country_id, "country_name": name, "status": "own", "status_text": "Seu país",
+			"can_declare": false, "declare_reason": ""}
+	var at_war: bool = state.at_war(player, country_id)
+	var reason := WarActions.check_declare_war(registry, state, player, country_id)
+	return {
+		"country_id": country_id,
+		"country_name": name,
+		"status": "war" if at_war else "peace",
+		"status_text": "Em guerra com %s" % name if at_war else "Em paz com %s" % name,
+		"can_declare": reason.is_empty(),
+		"declare_reason": reason,
+	}
+
+
+## Ações de batalha dos encontros da província: {encounter_id, battle_id (0 = sem batalha ativa), phase
+## ("free" | "in_progress" | "finished"), start_reason ("" = pode iniciar), result_text}. "finished" = a cena tática
+## terminou e o resultado está registrado, mas a APLICAÇÃO falhou (batalha ativa: aplicar de novo ou cancelar).
+## Batalha aplicada não aparece: o encontro foi resolvido (ou, se a retirada foi impossível, volta a "free").
+func _encounter_actions(province_id: String) -> Array[Dictionary]:
+	var actions: Array[Dictionary] = []
+	for encounter in state.encounters:
+		if encounter["province"] != province_id:
+			continue
+		var battle_id: int = state.battle_of_encounter(encounter["id"])
+		var phase := "free"
+		var result_text := ""
+		if battle_id != 0:
+			var tactical: Dictionary = state.battles[battle_id].get("tactical_result", {})
+			phase = "finished" if not tactical.is_empty() else "in_progress"
+			if not tactical.is_empty():
+				result_text = tactical["text"]
+		var can_retreat_offered := battle_id == 0 and EncounterRetreat.is_defender(state, encounter, state.player_country_id)
+		actions.append({
+			"encounter_id": encounter["id"],
+			"retreat_offered": can_retreat_offered,
+			"retreat_reason": EncounterRetreat.check(registry, state, state.player_country_id, encounter["id"]) if can_retreat_offered else "",
+			"battle_id": battle_id,
+			"phase": phase,
+			"start_reason": BattleFlow.start_reason(registry, state, encounter["id"]) if battle_id == 0 else "",
+			"result_text": result_text,
+		})
+	return actions
+
+
 ## Dados completos de um exército para o painel (composição, general, movimento e organização).
 func army_view(army_id: int) -> Dictionary:
 	if not state.armies.has(army_id):
@@ -317,7 +467,14 @@ func army_view(army_id: int) -> Dictionary:
 	var destinations: Array[Dictionary] = []
 	var joinable: Array[Dictionary] = []
 	var free_generals: Array[Dictionary] = []
+	var mergeable: Array[Dictionary] = []
 	if is_player:
+		for other_id in state.armies_in(army["province"], player):
+			if other_id != army_id:
+				var merge_reason := ArmyActions.check_merge(registry, state, player, army_id, other_id)
+				mergeable.append({"id": other_id, "name": state.armies[other_id]["name"],
+					"unit_count": state.armies[other_id]["units"].size(),
+					"reason": merge_reason, "available": merge_reason.is_empty()})
 		for option in ArmyActions.destinations(registry, state, player, army_id):
 			destinations.append({
 				"id": option["id"],
@@ -356,6 +513,7 @@ func army_view(army_id: int) -> Dictionary:
 		"status": status,
 		"destinations": destinations,
 		"joinable_units": joinable,
+		"mergeable_armies": mergeable,
 		"free_generals": free_generals,
 	}
 

@@ -155,6 +155,13 @@ Cada unidade deverá possuir:
 
 Exércitos serão compostos por unidades e comandados por generais. Limites de composição e capacidade de comando poderão ser adicionados posteriormente.
 
+**Regras militares já implementadas na campanha** (detalhes técnicos em `docs/ARCHITECTURE.md`):
+- Um exército tem no máximo 4 unidades.
+- **Mesclar:** dois exércitos do jogador na mesma província podem virar um só, se nenhum estiver em batalha ou em encontro pendente e a soma não passar de 4 unidades. O exército escolhido mantém nome e general; se não tiver general, herda o do outro; se os dois tiverem, o general do absorvido fica livre.
+- **Encontro:** um exército que entra numa província com exército de país em guerra cria um encontro pendente e os exércitos envolvidos ficam parados.
+- **Recuo do defensor:** o defensor pode recuar sem batalha, mas só se todos os seus exércitos no encontro tiverem uma rota até província do próprio país; caso contrário deve lutar. O atacante permanece na província.
+- **Retirada após a batalha:** o perdedor com sobreviventes recua para a província do próprio país mais próxima (pode cruzar território inimigo sem exército hostil); sem rota, o exército derrotado é destruído e o general fica livre. No empate recua o invasor.
+
 ### 8. Generais
 
 Cada general deverá ter:
@@ -189,6 +196,11 @@ A primeira versão deverá conter apenas movimentação, ataque, dano, moral bá
 As unidades poderão ser representadas por marcadores simples. Animações e modelos detalhados ficam para etapas posteriores.
 
 Após o combate, o resultado deverá atualizar o estado da campanha, incluindo baixas, unidades destruídas, sobreviventes, generais e controle territorial.
+
+**Regras da batalha tática já implementadas** (valores em `data/battle/battle_rules.json`):
+- **Fim da batalha:** um lado perde quando todas as suas unidades restantes estão em fuga ou já saíram do campo (não é preciso eliminá-las); se os dois lados quebram ao mesmo tempo, empate; no turno 40 vence quem tem mais homens em unidades efetivas.
+- **Moral:** cai com as baixas sofridas (mais no corpo a corpo); a destruição de uma unidade não abala as aliadas. Abalada a partir de 50 ou menos; em fuga a 25 ou menos; reagrupa a partir de 40; recupera +5 por turno (+8 em fuga) quando não há inimigo adjacente.
+- O resultado é aplicado à campanha assim que a cena tática termina. Ainda **não** há conquista de província, perseguição, experiência/morte de generais nem reposição de tropas.
 
 ### 10. Diplomacia
 

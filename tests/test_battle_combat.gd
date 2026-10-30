@@ -276,14 +276,14 @@ func test_destroyed_unit_is_removed_and_frees_the_hex() -> void:
 	assert_true(Movement.move_unit(state, "player", a, hx(4, 3))["ok"], "o hexágono liberado pode ser ocupado")
 
 
-func test_destroying_a_unit_shakes_nearby_allies_only() -> void:
+func test_destroying_a_unit_does_not_shake_nearby_allies() -> void:
 	var state := new_battle()
 	var a := put(state, "infantry", "A", "player", 3, 3)
 	var victim := put(state, "infantry", "Vítima", "enemy", 4, 3, {"strength": 1})
 	var near := put(state, "infantry", "Perto", "enemy", 5, 3)   # distância 1 da vítima
 	var far := put(state, "infantry", "Longe", "enemy", 9, 5)    # bem distante
 	Combat.attack(state, "player", a, victim)
-	assert_eq(state.units[near]["morale"], 90, "aliado próximo perde 10")
+	assert_eq(state.units[near]["morale"], 100, "aliado próximo não perde moral (penalidade removida)")
 	assert_eq(state.units[far]["morale"], 100, "aliado distante não perde")
 
 

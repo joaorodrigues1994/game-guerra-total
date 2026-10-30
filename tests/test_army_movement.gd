@@ -18,8 +18,11 @@ func _move(game: Dictionary, army_id: int, destination: String, country: String 
 	return ArmyActions.move_army(game["registry"], game["state"], country, army_id, destination)
 
 
-func _foreign_army_in(game: Dictionary, owner_id: String, province_id: String) -> int:
+## Exército estrangeiro HOSTIL: o país dele e o da França entram em guerra (a regra de encontros exige guerra declarada).
+func _foreign_army_in(game: Dictionary, owner_id: String, province_id: String, at_war: bool = true) -> int:
 	var state = game["state"]
+	if at_war and not state.at_war("fra", owner_id):
+		declare_war_between(game, "fra", owner_id)
 	var army_id: int = state.create_army("Forças de %s" % owner_id, owner_id, province_id)
 	state.armies[army_id]["units"].append(state.add_unit(game["registry"], INFANTRY, owner_id, province_id))
 	return army_id

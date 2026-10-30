@@ -22,6 +22,8 @@ var map_view: Control
 var unit_panel: PanelContainer
 var log_panel: PanelContainer
 var result_panel: Control
+## Batalha da campanha cujo resultado não pôde ser aplicado (ver set_application_failed).
+var application_failed: bool = false
 
 
 func setup(p_controller: BattleController, allow_back: bool) -> void:
@@ -82,6 +84,8 @@ func _build_top_bar(allow_back: bool) -> PanelContainer:
 
 	title_label = UiStyle.make_label(22, UiStyle.ACCENT)
 	title_label.text = "Batalha tática — %s" % controller.state.scenario_name
+	if controller.linked_battle_id != 0:
+		title_label.text += " (batalha #%d da campanha)" % controller.linked_battle_id
 	row.add_child(title_label)
 
 	turn_label = UiStyle.make_label(16)
@@ -97,6 +101,7 @@ func _build_top_bar(allow_back: bool) -> PanelContainer:
 
 	restart_button = Button.new()
 	restart_button.text = "Reiniciar batalha"
+	restart_button.visible = controller.linked_battle_id == 0  # batalha da campanha não reinicia
 	restart_button.pressed.connect(func() -> void: controller.restart())
 	row.add_child(restart_button)
 
@@ -108,10 +113,23 @@ func _build_top_bar(allow_back: bool) -> PanelContainer:
 	return bar
 
 
+## O resultado da batalha da campanha NÃO foi aplicado: mostra o erro no painel de resultado e sinaliza no botão de voltar
+## que a batalha continua pendente (a nova tentativa e o cancelamento ficam no painel da província, na campanha).
+func set_application_failed(text: String) -> void:
+	application_failed = true
+	result_panel.set_application_failure(text)
+	_refresh_top_bar()
+
+
 func _refresh_top_bar() -> void:
 	var state: RefCounted = controller.state
 	turn_label.text = controller.turn_text() if not state.over else "Batalha encerrada — %s" % controller.result_view()["title"]
 	end_turn_button.disabled = state.over or state.active_side != BattleController.PLAYER
+	if controller.linked_battle_id != 0:
+		# Batalha da campanha: sair antes do fim CANCELA a batalha; depois do fim apenas volta (o resultado fica registrado).
+		back_button.text = "Voltar à campanha" if state.over else "Cancelar batalha e voltar"
+		if application_failed:
+			back_button.text = "Voltar à campanha (resultado pendente)"
 
 
 func _unhandled_input(event: InputEvent) -> void:

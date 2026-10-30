@@ -28,6 +28,7 @@ func _army_in(game: Dictionary, owner_id: String, types: Array, province_id: Str
 
 ## Exército da França criado em Paris e MOVIDO para a província: o encontro é registrado pelo código real.
 func _fra_army_arriving(game: Dictionary, types: Array) -> int:
+	declare_war_between(game, "fra", "aus") if not game["state"].at_war("fra", "aus") else null  # encontros exigem guerra declarada
 	var army_id := _army_in(game, "fra", types, "prov_paris")
 	var moved := ArmyActions.move_army(game["registry"], game["state"], "fra", army_id, PROVINCE)
 	assert_true(moved["ok"], moved["message"])
@@ -150,6 +151,7 @@ func test_strength_and_morale_are_taken_from_the_campaign_units() -> void:
 	var wounded: int = state.armies[army]["units"][0]
 	state.unit_by_id(wounded)["strength"] = 320
 	state.unit_by_id(wounded)["morale"] = 55
+	declare_war_between(game, "fra", "aus")
 	ArmyActions.move_army(game["registry"], state, "fra", army, PROVINCE)
 	var result := _build(game, state.encounters[0]["id"])
 	assert_true(result["ok"], result["message"])
@@ -403,6 +405,7 @@ func test_encounter_with_more_than_two_countries_is_rejected() -> void:
 	var game := new_game()
 	_army_in(game, "aus", ["unit_line_inf"])
 	_army_in(game, "bav", ["unit_line_inf"])
+	declare_war_between(game, "fra", "bav")  # os dois adversários precisam estar em guerra com a França
 	_fra_army_arriving(game, ["unit_line_inf"])
 	var encounter: Dictionary = game["state"].encounters[0]
 	assert_eq(encounter["countries"], ["aus", "bav", "fra"], "o encontro real tem 3 países")

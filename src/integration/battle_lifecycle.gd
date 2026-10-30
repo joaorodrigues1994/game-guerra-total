@@ -2,7 +2,7 @@ extends RefCounted
 ## Ciclo de vida das batalhas no estado da campanha (GameState.battles): registrar, cancelar e transições.
 ## Camada de integração: usa o resultado do BattleScenarioBuilder (cenário + pedido) e altera SOMENTE o registro
 ## de batalhas e o campo "battle_id" do encontro; nunca toca efetivo, moral, composição dos exércitos,
-## províncias ou turnos. NÃO inicia a cena tática e NÃO aplica resultados (Etapas 5 e 6).
+## províncias ou turnos. NÃO inicia a cena tática; a aplicação do resultado à campanha é de BattleResolution (Etapa 6), que usa estas transições.
 ##
 ## Estados: "active" -> "applied" | "cancelled". "applied" e "cancelled" são finais; o registro nunca é apagado.
 ## Convenção de retorno: {ok, battle_id, message, errors}.
@@ -68,6 +68,7 @@ static func register(registry: RefCounted, state: RefCounted, built: Dictionary)
 		"scenario_id": scenario["id"],
 		"scenario": scenario.duplicate(true),
 		"result": {},
+		"tactical_result": {},
 		"history": [{"status": GameState.BATTLE_ACTIVE, "turn": state.turn}],
 	}
 	state.next_battle_id += 1
@@ -85,8 +86,36 @@ static func cancel(state: RefCounted, battle_id: int) -> Dictionary:
 	return result
 
 
+## Guarda o resultado da cena tática (BattleState.result_summary) na batalha ATIVA, uma única vez. NÃO muda o
+## estado da batalha (continua "active": os exércitos seguem bloqueados e o turno travado até a Etapa 6 aplicar
+## o resultado ou o jogador cancelar) e NÃO toca "result" nem qualquer dado estratégico.
+static func record_tactical_result(state: RefCounted, battle_id: int, summary: Dictionary) -> Dictionary:
+	var reason := check_can_record_result(state, battle_id, summary)
+	if not reason.is_empty():
+		return _fail(PackedStringArray([reason]), battle_id)
+	state.battles[battle_id]["tactical_result"] = summary.duplicate(true)
+	return {"ok": true, "battle_id": battle_id, "errors": PackedStringArray(),
+		"message": "Resultado tático da batalha #%d registrado (ainda não aplicado à campanha)." % battle_id}
+
+
+## Motivo pelo qual o resultado tático não pode ser registrado; "" se pode. Não altera nada.
+static func check_can_record_result(state: RefCounted, battle_id: int, summary: Dictionary) -> String:
+	if not state.battles.has(battle_id):
+		return "Batalha #%d inexistente." % battle_id
+	var battle: Dictionary = state.battles[battle_id]
+	if battle["status"] != GameState.BATTLE_ACTIVE:
+		return "A batalha #%d está '%s': só uma batalha ativa recebe resultado tático." % [battle_id, battle["status"]]
+	if not battle.get("tactical_result", {}).is_empty():
+		return "A batalha #%d já tem resultado tático registrado." % battle_id
+	if summary.get("scenario_id") != battle["scenario_id"]:
+		return "O resultado é do cenário '%s', não do cenário da batalha #%d ('%s')." % [str(summary.get("scenario_id")), battle_id, battle["scenario_id"]]
+	if not (summary.get("winner") in ["player", "enemy", "draw"]) or typeof(summary.get("units")) != TYPE_DICTIONARY:
+		return "Resultado tático incompleto (vencedor ou unidades ausentes): batalha não concluída."
+	return ""
+
+
 ## Única porta de mudança de estado de uma batalha. Valida a transição (active -> applied | cancelled).
-## "applied" só será usado quando o resultado for aplicado (Etapa 6); aqui apenas protege o ciclo de vida.
+## "applied" é usado por BattleResolution quando o resultado é aplicado por inteiro; aqui apenas se protege o ciclo de vida.
 static func transition(state: RefCounted, battle_id: int, new_status: String) -> Dictionary:
 	var reason := check_transition(state, battle_id, new_status)
 	if not reason.is_empty():

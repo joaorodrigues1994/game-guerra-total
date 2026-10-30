@@ -19,6 +19,7 @@ var deselect_button: Button
 var move_buttons: Dictionary = {}
 var detach_buttons: Dictionary = {}
 var join_buttons: Dictionary = {}
+var merge_buttons: Dictionary = {}
 var general_buttons: Dictionary = {}
 var unassign_button: Button
 
@@ -138,6 +139,12 @@ func show_army(view: Dictionary) -> void:
 		unassign_button = _add_button("Remover %s do comando" % view["general"]["name"], "",
 			controller.unassign_general.bind(view["id"]))
 
+	if not view["mergeable_armies"].is_empty():
+		_add_heading("Mesclar com outro exército")
+		for other in view["mergeable_armies"]:
+			merge_buttons[other["id"]] = _add_button("Mesclar %s (%d unidades)" % [other["name"], other["unit_count"]],
+				other["reason"], controller.merge_armies.bind(view["id"], other["id"]))
+
 	if not view["joinable_units"].is_empty():
 		_add_heading("Incorporar unidade da guarnição")
 		for unit in view["joinable_units"]:
@@ -178,6 +185,7 @@ func _clear_sections() -> void:
 	move_buttons = {}
 	detach_buttons = {}
 	join_buttons = {}
+	merge_buttons = {}
 	general_buttons = {}
 	unassign_button = null
 	for child in _sections.get_children():

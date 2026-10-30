@@ -11,6 +11,7 @@ var title_label: Label
 var reason_label: Label
 var player_label: Label
 var enemy_label: Label
+var campaign_note_label: Label
 var restart_button: Button
 var back_button: Button
 
@@ -44,6 +45,10 @@ func _init() -> void:
 	column.add_child(player_label)
 	enemy_label = UiStyle.make_label(13, UiStyle.TEXT, true)
 	column.add_child(enemy_label)
+	campaign_note_label = UiStyle.make_label(13, UiStyle.TEXT_DIM, true)
+	campaign_note_label.text = "Batalha da campanha: o resultado é aplicado aos exércitos ao terminar."
+	campaign_note_label.visible = false
+	column.add_child(campaign_note_label)
 
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 12)
@@ -60,8 +65,24 @@ func _init() -> void:
 
 func bind(controller: BattleController, allow_back: bool) -> void:
 	back_button.visible = allow_back
+	restart_button.visible = controller.linked_battle_id == 0
+	campaign_note_label.visible = controller.linked_battle_id != 0
 	controller.battle_finished.connect(func(_summary: Dictionary) -> void: show_result(controller.result_view(), controller))
 	controller.restarted.connect(func() -> void: visible = false)
+
+
+## Texto sobre o efeito do resultado na campanha (batalha da campanha); vazio mantém o texto atual.
+func set_campaign_note(text: String) -> void:
+	if not text.is_empty():
+		campaign_note_label.text = text
+		campaign_note_label.remove_theme_color_override("font_color")
+
+
+## O resultado NÃO foi aplicado à campanha: substitui o aviso padrão pelo erro completo, em destaque.
+func set_application_failure(text: String) -> void:
+	campaign_note_label.text = text
+	campaign_note_label.add_theme_color_override("font_color", UiStyle.ERROR)
+	campaign_note_label.visible = true
 
 
 func show_result(view: Dictionary, controller: BattleController) -> void:

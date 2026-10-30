@@ -3,12 +3,12 @@ extends RefCounted
 ## Toda ação valida ANTES de alterar o estado: se algo falhar, o estado permanece intacto e o motivo
 ## é devolvido em português. Resultado: {ok: bool, message: String}.
 ##
-## Regras de movimentação (sem guerra nem diplomacia ainda):
+## Regras de movimentação (a única relação diplomática é a guerra declarada, GameState.wars):
 ##  - um exército só se move por conexões do grafo de províncias (rules/provinces.json), 1 província por turno;
-##  - só pode entrar em províncias do PRÓPRIO país (não há declaração de guerra nem acordos de passagem);
-##  - se o destino (próprio) já contém exército de outro país, o movimento é feito mas fica registrado um
-##    encontro pendente (state.encounters), e os exércitos envolvidos ficam parados até ele ser resolvido
-##    (a resolução virá com as batalhas).
+##  - só pode entrar em províncias do PRÓPRIO país ou de um país EM GUERRA com o seu (não há acordos de passagem);
+##  - se o destino já contém exército de um país em GUERRA com o do exército, o movimento é feito mas fica registrado
+##    um encontro pendente (state.encounters), e os exércitos envolvidos ficam parados até ele ser resolvido.
+##    Exércitos de países em paz coexistem sem encontro (países sem guerra declarada NÃO são inimigos).
 ##
 ## BLOQUEIO POR BATALHA: um exército de uma batalha ATIVA (GameState.battles) não pode se mover, receber ou
 ## perder unidades nem ter o general alterado, e nenhum exército pode entrar na província de uma batalha
@@ -85,7 +85,7 @@ static func check_move(registry: RefCounted, state: RefCounted, country_id: Stri
 		return "Destino inválido: %s não é conectada a %s." % [
 			registry.provinces[destination_id]["name"], registry.provinces[army["province"]]["name"]]
 	var destination_owner: String = state.owner_of(destination_id)
-	if destination_owner != country_id:
+	if destination_owner != country_id and not state.at_war(country_id, destination_owner):
 		return "Sem acesso ao território de %s: não há guerra declarada nem acordo de passagem." % \
 			registry.countries[destination_owner]["name"]
 	return ""
@@ -109,12 +109,12 @@ static func move_army(registry: RefCounted, state: RefCounted, country_id: Strin
 	return {"ok": true, "message": message, "encounter": encounter}
 
 
-## Se há exército de outro país na província do exército, registra (ou amplia) o encontro.
+## Se há exército de um país EM GUERRA com o do exército na província dele, registra (ou amplia) o encontro.
 static func _register_encounter(state: RefCounted, army_id: int) -> Dictionary:
 	var army: Dictionary = state.armies[army_id]
 	var involved: Array[int] = [army_id]
 	for other_id in state.armies_in(army["province"]):
-		if state.armies[other_id]["owner"] != army["owner"]:
+		if state.at_war(army["owner"], state.armies[other_id]["owner"]):
 			involved.append(other_id)
 	if involved.size() == 1:
 		return {}
@@ -279,6 +279,52 @@ static func incorporate_new_unit(registry: RefCounted, state: RefCounted, unit_i
 	var new_id: int = state.create_army(_new_army_name(registry, state, unit["province"]), unit["owner"], unit["province"])
 	state.armies[new_id]["units"].append(unit_id)
 	return new_id
+
+
+## Mesclar `source_id` em `target_id` (mesmo país, mesma província, livres de batalha e de encontro, cabendo no limite
+## de unidades). O alvo mantém nome e general; sem general, herda o do exército absorvido.
+static func check_merge(registry: RefCounted, state: RefCounted, country_id: String,
+		target_id: int, source_id: int) -> String:
+	if target_id == source_id:
+		return "Escolha dois exércitos diferentes."
+	for army_id in [target_id, source_id]:
+		if not state.armies.has(army_id):
+			return "Exército inexistente."
+		if state.armies[army_id]["owner"] != country_id:
+			return "Este exército pertence a outro país."
+	var target: Dictionary = state.armies[target_id]
+	var source: Dictionary = state.armies[source_id]
+	if target["province"] != source["province"]:
+		return "Os exércitos estão em províncias diferentes."
+	for army_id in [target_id, source_id]:
+		var merge_lock := battle_lock_reason(state, army_id)
+		if not merge_lock.is_empty():
+			return merge_lock
+		if is_engaged(state, army_id):
+			return "O exército %s está em um encontro pendente e não pode ser reorganizado." % state.armies[army_id]["name"]
+	var total: int = target["units"].size() + source["units"].size()
+	if total > max_units(registry):
+		return "Os dois exércitos somam %d unidades; o limite é %d." % [total, max_units(registry)]
+	return ""
+
+
+static func merge_armies(registry: RefCounted, state: RefCounted, country_id: String,
+		target_id: int, source_id: int) -> Dictionary:
+	var reason := check_merge(registry, state, country_id, target_id, source_id)
+	if not reason.is_empty():
+		return {"ok": false, "message": reason}
+	var target: Dictionary = state.armies[target_id]
+	var source: Dictionary = state.armies[source_id]
+	var message := "%s incorporado ao %s (%d unidades)." % [source["name"], target["name"], target["units"].size() + source["units"].size()]
+	target["units"].append_array(source["units"])
+	target["moved"] = target["moved"] or source["moved"]
+	if not str(source["general"]).is_empty():
+		if str(target["general"]).is_empty():
+			target["general"] = source["general"]
+		else:
+			message += " %s deixou o comando." % registry.generals[source["general"]]["name"]
+	state.armies.erase(source_id)
+	return {"ok": true, "army_id": target_id, "message": message}
 
 
 static func _new_army_name(registry: RefCounted, state: RefCounted, province_id: String) -> String:

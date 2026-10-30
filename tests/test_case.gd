@@ -37,6 +37,12 @@ func new_game(player_country_id: String = "fra") -> Dictionary:
 	return {"registry": registry, "state": state}
 
 
+## Declara guerra pela ação real da campanha (WarActions); falha o teste se a declaração for recusada.
+func declare_war_between(game: Dictionary, country_id: String, target_id: String) -> void:
+	var result: Dictionary = preload("res://src/campaign/war_actions.gd").declare_war(game["registry"], game["state"], country_id, target_id)
+	assert_true(result["ok"], "declarar guerra: %s" % result["message"])
+
+
 ## Unidades de um país (a partida inicial já tem exércitos de Áustria e Baviera).
 func units_of(state: RefCounted, country_id: String) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []

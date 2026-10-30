@@ -10,7 +10,7 @@
   "morale_hit_penalty": 3,
   "morale_melee_extra_penalty": 2,
   "ally_death_radius": 2,
-  "ally_death_morale_penalty": 10,
+  "ally_death_morale_penalty": 0,
   "morale_recovery": 5,
   "morale_recovery_routing": 8,
   "shaken_threshold": 50,

@@ -22,9 +22,18 @@ var units_label: Label
 var connections_label: Label
 var actions_note_label: Label
 var encounter_label: Label
+## Relação do jogador com o dono da província (texto) e botão "Declarar guerra" (null quando a província é própria).
+var relation_label: Label
+var war_button: Button
 ## id do exército / da unidade de guarnição -> botão, reconstruídos a cada atualização.
 var army_buttons: Dictionary = {}
 var form_army_buttons: Dictionary = {}
+## id do encontro -> botão "Iniciar batalha"; id da batalha -> botão "Cancelar batalha". Reconstruídos a cada atualização.
+var start_battle_buttons: Dictionary = {}
+var retreat_buttons: Dictionary = {}
+var cancel_battle_buttons: Dictionary = {}
+## id da batalha -> botão "Aplicar resultado" (só quando a aplicação falhou e pode ser repetida).
+var apply_battle_buttons: Dictionary = {}
 var clear_button: Button
 ## id da construção/unidade -> botão, reconstruídos a cada atualização.
 var build_buttons: Dictionary = {}
@@ -169,6 +178,7 @@ func show_province(view: Dictionary) -> void:
 	connections_label.text = _lines_or(links, "Nenhuma")
 
 	_build_military(view)
+	_build_diplomacy(view)
 	_build_actions(view)
 
 
@@ -213,6 +223,47 @@ func _build_military(view: Dictionary) -> void:
 		button.pressed.connect(controller.form_army.bind(view["id"], unit["id"]))
 		_military.add_child(button)
 		form_army_buttons[unit["id"]] = button
+	_build_battle_actions(view)
+
+
+## Ações de batalha dos encontros da província (iniciar / cancelar), com o motivo quando indisponíveis.
+func _build_battle_actions(view: Dictionary) -> void:
+	for entry in view["encounter_actions"]:
+		_military_heading("Encontro #%d" % entry["encounter_id"])
+		if entry["phase"] == "free":
+			var start := _military_button("Iniciar batalha", entry["start_reason"],
+				controller.start_battle.bind(entry["encounter_id"]))
+			start_battle_buttons[entry["encounter_id"]] = start
+			if entry["retreat_offered"]:
+				retreat_buttons[entry["encounter_id"]] = _military_button("Recuar sem batalha", entry["retreat_reason"],
+					controller.retreat_from_encounter.bind(entry["encounter_id"]))
+			continue
+		if entry["phase"] == "in_progress":
+			_military_note("Batalha #%d em andamento: os exércitos participantes estão bloqueados." % entry["battle_id"])
+		else:
+			_military_note("Batalha #%d concluída: %s
+O resultado está registrado, mas a aplicação aos exércitos FALHOU (veja a mensagem na barra de status). Nada foi alterado. Aplique de novo ou cancele a batalha; enquanto isso os participantes seguem bloqueados e o turno não avança." % [
+				entry["battle_id"], entry["result_text"]])
+			apply_battle_buttons[entry["battle_id"]] = _military_button("Aplicar resultado da batalha #%d" % entry["battle_id"], "",
+				controller.apply_battle_result.bind(entry["battle_id"]))
+		cancel_battle_buttons[entry["battle_id"]] = _military_button("Cancelar batalha #%d" % entry["battle_id"], "",
+			controller.cancel_battle.bind(entry["battle_id"]))
+
+
+func _military_button(text: String, reason: String, on_pressed: Callable) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.clip_text = true
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.disabled = not reason.is_empty()
+	button.tooltip_text = reason
+	button.pressed.connect(on_pressed)
+	_military.add_child(button)
+	if not reason.is_empty():
+		var label := UiStyle.make_label(13, UiStyle.ERROR, true)
+		label.text = reason
+		_military.add_child(label)
+	return button
 
 
 func _military_heading(text: String) -> void:
@@ -230,9 +281,39 @@ func _military_note(text: String) -> void:
 func _clear_military() -> void:
 	army_buttons = {}
 	form_army_buttons = {}
+	start_battle_buttons = {}
+	retreat_buttons = {}
+	cancel_battle_buttons = {}
+	apply_battle_buttons = {}
 	for child in _military.get_children():
 		_military.remove_child(child)
 		child.queue_free()
+
+
+# --- Diplomacia (só guerra) ----------------------------------------------------
+
+## Em província de outro país: dono, relação (paz/guerra) e a ação "Declarar guerra" (com o motivo quando recusada).
+func _build_diplomacy(view: Dictionary) -> void:
+	var diplomacy: Dictionary = view["diplomacy"]
+	if diplomacy["status"] == "own":
+		return
+	_action_heading("Diplomacia")
+	var at_war: bool = diplomacy["status"] == "war"
+	relation_label = _action_note("Controlada por %s. %s." % [diplomacy["country_name"], diplomacy["status_text"]],
+		UiStyle.ERROR if at_war else UiStyle.TEXT)
+	if at_war:
+		return
+	war_button = Button.new()
+	war_button.text = "Declarar guerra a %s" % diplomacy["country_name"]
+	war_button.clip_text = true
+	war_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	war_button.disabled = not diplomacy["can_declare"]
+	war_button.tooltip_text = diplomacy["declare_reason"] if not diplomacy["can_declare"] \
+		else "Seus exércitos poderão entrar no território de %s e exércitos dele gerarão encontros." % diplomacy["country_name"]
+	war_button.pressed.connect(controller.declare_war.bind(diplomacy["country_id"]))
+	_actions.add_child(war_button)
+	if not diplomacy["can_declare"]:
+		_action_note(diplomacy["declare_reason"], UiStyle.ERROR)
 
 
 # --- Ações ------------------------------------------------------------------
@@ -288,6 +369,8 @@ func _action_note(text: String, color: Color = UiStyle.TEXT_DIM) -> Label:
 
 
 func _clear_actions() -> void:
+	relation_label = null
+	war_button = null
 	build_buttons = {}
 	recruit_buttons = {}
 	for child in _actions.get_children():

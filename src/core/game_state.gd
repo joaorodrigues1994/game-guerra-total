@@ -45,6 +45,7 @@ var next_encounter_id: int = 1
 ##   sides {player|enemy: {country, armies, units}}, armies (todos os participantes, ordenados),
 ##   units {id da unidade: {army, type, category, owner, strength, morale}}   (INSTANTÂNEO antes da batalha),
 ##   scenario_id, scenario (cópia do cenário tático gerado), result (vazio até o resultado ser aplicado),
+##   tactical_result (BattleState.result_summary guardado quando a cena tática termina; vazio antes; NÃO é aplicação),
 ##   history [{status, turn}] }
 ## Ciclo de vida (transições em BattleLifecycle): active -> applied | cancelled; applied e cancelled são finais.
 ## Exércitos de uma batalha ATIVA ficam bloqueados (ver battle_of_army e ArmyActions).
@@ -53,6 +54,12 @@ const BATTLE_APPLIED := "applied"
 const BATTLE_CANCELLED := "cancelled"
 var battles: Dictionary = {}
 var next_battle_id: int = 1
+
+## Guerras declaradas (a única relação diplomática que existe): chave do par de países em ordem alfabética
+## ("aus|fra", ver war_key) -> {countries [a, b] ordenados, declared_by, turn}. Sem entrada = paz: países sem guerra
+## declarada NÃO são inimigos (não se movem no território um do outro e seus exércitos não geram encontros).
+## Não há paz negociada nem fim de guerra por enquanto.
+var wars: Dictionary = {}
 
 
 ## Cria o estado inicial a partir dos dados validados. Retorna false se o país do jogador não existir.
@@ -72,6 +79,7 @@ func setup_from_registry(registry: RefCounted, p_player_country_id: String) -> b
 	next_encounter_id = 1
 	battles = {}
 	next_battle_id = 1
+	wars = {}
 	for id in registry.countries:
 		var resources := {}
 		for res in registry.countries[id]["starting_resources"]:
@@ -100,6 +108,27 @@ func setup_from_registry(registry: RefCounted, p_player_country_id: String) -> b
 		if entry["general"] != null:
 			armies[army_id]["general"] = entry["general"]
 	return true
+
+
+## Chave canônica do par de países (a ordem dos argumentos não importa).
+static func war_key(country_a: String, country_b: String) -> String:
+	return "%s|%s" % ([country_a, country_b] if country_a <= country_b else [country_b, country_a])
+
+
+## Há guerra declarada entre os dois países? Um país nunca está em guerra consigo mesmo.
+func at_war(country_a: String, country_b: String) -> bool:
+	return country_a != country_b and wars.has(war_key(country_a, country_b))
+
+
+## Ids (ordenados) dos países em guerra com `country_id`.
+func enemies_of(country_id: String) -> Array[String]:
+	var result: Array[String] = []
+	for key in wars:
+		var pair: Array = wars[key]["countries"]
+		if country_id in pair:
+			result.append(pair[1] if pair[0] == country_id else pair[0])
+	result.sort()
+	return result
 
 
 func owner_of(province_id: String) -> String:
@@ -278,4 +307,5 @@ func to_dict() -> Dictionary:
 		"next_encounter_id": next_encounter_id,
 		"battles": battles.duplicate(true),
 		"next_battle_id": next_battle_id,
+		"wars": wars.duplicate(true),
 	}

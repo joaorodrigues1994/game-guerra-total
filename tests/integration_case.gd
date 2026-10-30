@@ -35,6 +35,8 @@ func fra_army_arriving(game: Dictionary, types: Array, from_province: String, to
 ## Encontro em `province` (aus já presente; fra chega vinda da outra província francesa). Devolve o id do encontro.
 func make_encounter(game: Dictionary, province: String = PROVINCE, types: Array = ["unit_line_inf", "unit_line_inf", "unit_light_cav"]) -> int:
 	var from_province := OTHER_PROVINCE if province == PROVINCE else PROVINCE
+	if not game["state"].at_war("fra", "aus"):
+		declare_war_between(game, "fra", "aus")
 	army_in(game, "aus", ["unit_line_inf", "unit_field_art"], province)
 	fra_army_arriving(game, types, from_province, province)
 	for encounter in game["state"].encounters:
@@ -42,6 +44,29 @@ func make_encounter(game: Dictionary, province: String = PROVINCE, types: Array 
 			return encounter["id"]
 	assert_true(false, "o encontro deveria existir em %s" % province)
 	return 0
+
+
+## Destrói todas as unidades de um lado da cena tática COMO O MOTOR FAZ (efetivo 0 e destruída): o resultado
+## gerado é coerente e pode ser aplicado à campanha.
+func wipe_side(battle: BattleController, side: String) -> void:
+	for id in battle.state.live_units(side):
+		battle.state.units[id]["strength"] = 0
+		battle.state.units[id]["destroyed"] = true
+
+
+## Fixa o desfecho de uma unidade tática, localizada pelo source_id (id da unidade de campanha):
+## status "firm" | "shaken" | "routing" | "fled" | "destroyed" (destruída zera o efetivo).
+func set_outcome(battle: BattleController, source_id: int, strength: int, morale: int, status: String = "firm") -> void:
+	for id in battle.state.units:
+		var unit: Dictionary = battle.state.units[id]
+		if unit["source_id"] == source_id:
+			unit["strength"] = 0 if status == "destroyed" else strength
+			unit["morale"] = morale
+			unit["destroyed"] = status == "destroyed"
+			unit["fled"] = status == "fled"
+			unit["routing"] = status == "routing"
+			return
+	assert_true(false, "unidade tática com source_id %d não encontrada" % source_id)
 
 
 func build_scenario(game: Dictionary, encounter_id: int) -> Dictionary:

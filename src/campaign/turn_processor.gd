@@ -118,6 +118,28 @@ func validate_state(registry: RefCounted, state: RefCounted) -> PackedStringArra
 			problems.append("Unidade inválida: %s" % str(unit["id"]))
 	problems.append_array(_validate_armies(state))
 	problems.append_array(_validate_battles(registry, state))
+	problems.append_array(_validate_wars(registry, state))
+	return problems
+
+
+## Guerras: chave canônica do par, dois países distintos e existentes, quem declarou é um deles.
+func _validate_wars(registry: RefCounted, state: RefCounted) -> PackedStringArray:
+	var problems := PackedStringArray()
+	for key in state.wars:
+		var war: Variant = state.wars[key]
+		if typeof(war) != TYPE_DICTIONARY or typeof(war.get("countries")) != TYPE_ARRAY or war["countries"].size() != 2:
+			problems.append("Guerra %s com registro inválido." % str(key))
+			continue
+		var pair: Array = war["countries"]
+		if pair[0] == pair[1]:
+			problems.append("Guerra %s: um país em guerra consigo mesmo." % str(key))
+			continue
+		if not registry.countries.has(pair[0]) or not registry.countries.has(pair[1]):
+			problems.append("Guerra %s envolve país inexistente." % str(key))
+		if key != state.war_key(pair[0], pair[1]):
+			problems.append("Guerra %s com chave diferente da canônica (%s)." % [str(key), state.war_key(pair[0], pair[1])])
+		if not (war.get("declared_by") in pair):
+			problems.append("Guerra %s declarada por um país que não participa dela." % str(key))
 	return problems
 
 
@@ -136,6 +158,8 @@ func _validate_battles(registry: RefCounted, state: RefCounted) -> PackedStringA
 		if malformed or typeof(battle.get("armies")) != TYPE_ARRAY or typeof(battle.get("units")) != TYPE_DICTIONARY:
 			problems.append("Batalha %s com registro incompleto (faltam encounter_id, province, armies ou units)." % str(battle_id))
 			continue
+		if battle.has("tactical_result") and typeof(battle["tactical_result"]) != TYPE_DICTIONARY:
+			problems.append("Batalha %s: o resultado tático registrado não é um dicionário." % str(battle_id))
 		if not (battle.get("status") in [state.BATTLE_ACTIVE, state.BATTLE_APPLIED, state.BATTLE_CANCELLED]):
 			problems.append("Batalha %s com estado inválido: %s" % [str(battle_id), str(battle.get("status"))])
 			continue

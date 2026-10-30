@@ -258,6 +258,7 @@ func test_full_army_blocks_joining_with_visible_reason() -> void:
 func test_encounter_is_visible_in_the_interface() -> void:
 	var main := _main()
 	var mine := _add_fra_army(main)
+	declare_war_between({"registry": main.registry, "state": main.state}, "fra", "aus")
 	var intruder: int = main.state.create_army("Intruso", "aus", "prov_strasbourg")
 	main.state.armies[intruder]["units"].append(main.state.add_unit(main.registry, INFANTRY, "aus", "prov_strasbourg"))
 	main.controller.select_army(mine)

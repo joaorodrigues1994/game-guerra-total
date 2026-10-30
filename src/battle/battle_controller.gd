@@ -25,9 +25,16 @@ signal restarted
 
 var registry: RefCounted
 var scenario_id: String = ""
+## Cenário em memória usado por setup_from_scenario (vazio = cenário cadastrado em `registry`).
+var scenario: Dictionary = {}
+## Id opaco da batalha da campanha a que esta batalha pertence (0 = batalha independente/de teste). A batalha
+## não interpreta o valor: só o usa para recusar o reinício e para a interface se identificar.
+var linked_battle_id: int = 0
 var state: BattleState
 var selected_unit_id: int = 0
 var selected_hex: Vector2i = NO_HEX
+## Motivos da última falha de setup()/setup_from_scenario().
+var setup_errors: PackedStringArray = PackedStringArray()
 
 var _logged: int = 0
 var _announced: bool = false
@@ -36,9 +43,32 @@ var _announced: bool = false
 func setup(p_registry: RefCounted, p_scenario_id: String) -> bool:
 	registry = p_registry
 	scenario_id = p_scenario_id
+	scenario = {}
 	state = BattleState.new()
 	if not state.setup(registry, scenario_id):
+		setup_errors = state.setup_errors
 		return false
+	setup_errors = PackedStringArray()
+	Turns.begin_turn(state, state.active_side)
+	_logged = 0
+	_announced = false
+	_flush_log()
+	return true
+
+
+## Inicia a batalha a partir de um cenário em memória (ex.: o registrado pela campanha). O cenário é validado
+## antes de qualquer alteração: se for inválido, devolve false, preenche `setup_errors` e este controlador
+## permanece como estava.
+func setup_from_scenario(p_registry: RefCounted, p_scenario: Dictionary) -> bool:
+	var fresh := BattleState.new()
+	if not fresh.setup_from_scenario(p_registry, p_scenario):
+		setup_errors = fresh.setup_errors
+		return false
+	setup_errors = PackedStringArray()
+	registry = p_registry
+	scenario = p_scenario.duplicate(true)
+	scenario_id = scenario["id"]
+	state = fresh
 	Turns.begin_turn(state, state.active_side)
 	_logged = 0
 	_announced = false
@@ -47,10 +77,17 @@ func setup(p_registry: RefCounted, p_scenario_id: String) -> bool:
 
 
 ## Reinicia a batalha do zero (terreno, unidades, posições, moral, turnos, semente do RNG e registro).
-## Os mesmos objetos e conexões de sinal continuam valendo: nada é duplicado.
+## Os mesmos objetos e conexões de sinal continuam valendo: nada é duplicado. Uma batalha ligada à campanha
+## não reinicia (o resultado tático registrado seria de outra partida).
 func restart() -> void:
+	if linked_battle_id != 0:
+		message_posted.emit("Esta batalha da campanha não pode ser reiniciada.", true)
+		return
 	state = BattleState.new()
-	state.setup(registry, scenario_id)
+	if scenario.is_empty():
+		state.setup(registry, scenario_id)
+	else:
+		state.setup_from_scenario(registry, scenario)
 	Turns.begin_turn(state, state.active_side)
 	selected_unit_id = 0
 	selected_hex = NO_HEX

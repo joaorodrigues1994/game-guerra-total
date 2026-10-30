@@ -182,6 +182,7 @@ func result_summary() -> Dictionary:
 			"strength": unit["strength"],
 			"max_strength": unit["max_strength"],
 			"morale": unit["morale"],
+			"max_morale": unit["max_morale"],
 			"status": status_of(unit),
 		})
 	return {
